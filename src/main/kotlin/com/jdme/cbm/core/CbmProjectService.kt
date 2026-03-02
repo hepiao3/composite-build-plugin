@@ -68,8 +68,8 @@ class CbmProjectService(private val project: Project) {
 
         return try {
             val content = file.readText()
-            // 简单解析 JSON：提取 enabledModules 数组
-            val regex = Regex("""\"enabledModules\"\s*:\s*\[(.*?)\]""")
+            // 简单解析 JSON：提取 enabledModules 数组（使用贪婪匹配支持多行）
+            val regex = Regex("""\"enabledModules\"\s*:\s*\[([\s\S]*?)\]""")
             val match = regex.find(content)
 
             if (match != null) {
@@ -128,6 +128,7 @@ class CbmProjectService(private val project: Project) {
 
     /**
      * 从 JSON5 文件加载模块列表，同时从状态文件获取启用状态。
+     * 只按 .cbm-include-build.json 中 enabledModules 列表来勾选模块。
      * 在后台线程执行。
      */
     fun loadModules(onComplete: ((List<ModuleConfig>) -> Unit)? = null) {
@@ -151,6 +152,29 @@ class CbmProjectService(private val project: Project) {
             ApplicationManager.getApplication().invokeLater {
                 notifyListeners()
                 onComplete?.invoke(_modules)
+            }
+        }
+    }
+
+    /**
+     * 仅从状态文件刷新勾选状态，不重新加载 JSON5 配置。
+     * 用于面板每次显示时从外部文件同步最新状态。
+     */
+    fun refreshFromStateFile() {
+        ApplicationManager.getApplication().executeOnPooledThread {
+            val newEnabledModules = loadEnabledModulesFromStateFile()
+            val changed = newEnabledModules != _enabledModules
+
+            if (changed) {
+                _enabledModules = newEnabledModules.toMutableSet()
+                // 更新模块的勾选状态
+                _modules = _modules.map { module ->
+                    module.copy(includeBuild = _enabledModules.contains(module.name))
+                }.toMutableList()
+
+                ApplicationManager.getApplication().invokeLater {
+                    notifyListeners()
+                }
             }
         }
     }

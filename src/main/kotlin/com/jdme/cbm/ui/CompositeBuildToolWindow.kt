@@ -3,7 +3,10 @@ package com.jdme.cbm.ui
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
+import com.intellij.ui.content.Content
 import com.intellij.ui.content.ContentFactory
+import com.intellij.ui.content.ContentManagerAdapter
+import com.intellij.ui.content.ContentManagerEvent
 import com.jdme.cbm.core.CbmProjectService
 import java.io.File
 import javax.swing.JLabel
@@ -24,7 +27,7 @@ class CompositeBuildToolWindow : ToolWindowFactory {
         val service = CbmProjectService.getInstance(project)
         val contentFactory = ContentFactory.getInstance()
 
-        val content = if (service.configFile.exists()) {
+        val content: Content = if (service.configFile.exists()) {
             // 正常情况：展示模块列表面板
             val panel = ModuleListPanel(project)
             contentFactory.createContent(panel, "", false)
@@ -35,6 +38,18 @@ class CompositeBuildToolWindow : ToolWindowFactory {
         }
 
         toolWindow.contentManager.addContent(content)
+
+        // 监听内容显示事件，面板每次显示时从状态文件刷新勾选状态
+        toolWindow.contentManager.addContentManagerListener(object : ContentManagerAdapter() {
+            override fun selectionChanged(event: ContentManagerEvent) {
+                val selectedContent = event.content
+                // 找到对应的 ModuleListPanel 并刷新
+                val component = selectedContent.component
+                if (component is ModuleListPanel) {
+                    service.refreshFromStateFile()
+                }
+            }
+        })
     }
 
     private fun buildGuidePanel(
