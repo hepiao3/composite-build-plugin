@@ -17,6 +17,8 @@ import com.jdme.cbm.model.ModuleStatus
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
+import java.awt.event.ComponentAdapter
+import java.awt.event.ComponentEvent
 import javax.swing.*
 import javax.swing.table.AbstractTableModel
 import javax.swing.table.DefaultTableCellRenderer
@@ -50,7 +52,20 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
     init {
         buildUI()
         registerServiceListener()
+        registerVisibilityListener()
         service.loadModules()
+    }
+
+    /**
+     * 监听面板显示状态，当面板变得可见时从状态文件刷新勾选状态。
+     * 解决工具窗口收起再展开时无法刷新勾选状态的问题。
+     */
+    private fun registerVisibilityListener() {
+        addComponentListener(object : ComponentAdapter() {
+            override fun componentShown(e: ComponentEvent) {
+                service.refreshFromStateFile()
+            }
+        })
     }
 
     private fun buildUI() {
@@ -68,6 +83,8 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
         val syncBtn = JButton("⟳ Sync Gradle").apply {
             addActionListener {
+                // 先从状态文件同步勾选状态，再触发 Gradle Sync
+                service.refreshFromStateFile()
                 GradleSyncTrigger.sync(project)
             }
         }
