@@ -85,6 +85,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             addActionListener {
                 // 先从状态文件同步勾选状态，再触发 Gradle Sync
                 service.refreshFromStateFile()
+                service.markAsSynced()
                 GradleSyncTrigger.sync(project)
             }
         }
@@ -175,6 +176,9 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         val mavenCount = all.count { it.status == ModuleStatus.MAVEN }
         val missingCount = all.count { it.status == ModuleStatus.MISSING }
         statusLabel.text = buildString {
+            if (service.hasUnsavedChanges) {
+                append("⚠ 待 Sync 生效 | ")
+            }
             append("LOCAL: $localCount / MAVEN: $mavenCount")
             if (missingCount > 0) append(" / 未下载: $missingCount")
         }
@@ -183,25 +187,19 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun onToggleIncludeBuild(row: Int, value: Boolean) {
         val module = displayedModules.getOrNull(row) ?: return
         if (value && !module.localDirExists) {
-            val choice = Messages.showYesNoCancelDialog(
+            val choice = Messages.showYesNoDialog(
                 project,
                 "模块 ${module.name} 的本地目录不存在（${module.localDirName}）。\n" +
                 "切换为 LOCAL 模式前需要先下载模块。\n\n" +
-                "是否现在下载？",
+                "是否现在下载并切换？",
                 "模块未下载",
                 "下载并切换",
-                "仅切换配置",
                 "取消",
                 Messages.getWarningIcon()
             )
-            when (choice) {
-                Messages.YES -> {
-                    downloadModule(module)
-                    return
-                }
-                Messages.CANCEL -> return
-                // Messages.NO: 继续切换配置（即使目录不存在）
-            }
+            if (choice != Messages.YES) return
+            downloadModule(module)
+            return
         }
         service.setIncludeBuild(module.name, value)
     }
