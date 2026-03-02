@@ -53,16 +53,18 @@ class CbmProjectService(private val project: Project) {
     private var _enabledModules: MutableSet<String> = mutableSetOf()
     val enabledModules: Set<String> get() = _enabledModules.toSet()
 
-    /** 是否有未同步到 Gradle 的更改（用户已勾选但还未 Sync） */
-    private var _hasUnsavedChanges: Boolean = false
-    val hasUnsavedChanges: Boolean get() = _hasUnsavedChanges
+    /** 上次 Sync 后的勾选状态快照，用于判断是否有未同步的更改 */
+    private var _syncedEnabledModules: Set<String> = emptySet()
+
+    /** 是否有未同步到 Gradle 的更改（当前勾选状态与上次 Sync 状态不同） */
+    val hasUnsavedChanges: Boolean get() = _enabledModules != _syncedEnabledModules
 
     /**
-     * 标记已同步完成，清除待 Sync 提示。
+     * 标记已同步完成，更新快照。
      * 在用户点击 Sync Gradle 后调用。
      */
     fun markAsSynced() {
-        _hasUnsavedChanges = false
+        _syncedEnabledModules = _enabledModules.toSet()
         notifyListeners()
     }
 
@@ -184,8 +186,8 @@ class CbmProjectService(private val project: Project) {
                 _modules = _modules.map { module ->
                     module.copy(includeBuild = _enabledModules.contains(module.name))
                 }.toMutableList()
-                // 从文件刷新后，已同步到最新状态
-                _hasUnsavedChanges = false
+                // 从文件刷新后，已同步到最新状态，更新快照
+                _syncedEnabledModules = _enabledModules.toSet()
 
                 ApplicationManager.getApplication().invokeLater {
                     notifyListeners()
@@ -209,10 +211,12 @@ class CbmProjectService(private val project: Project) {
             return
         }
 
+        val currentValue = _modules[idx].includeBuild
+        // 如果新值与原值相同，不做处理
+        if (currentValue == value) return
+
         // 更新内存状态
         _modules[idx] = _modules[idx].copy(includeBuild = value)
-        // 标记有未同步的更改，需要等 Sync 后才生效
-        _hasUnsavedChanges = true
         if (value) {
             _enabledModules.add(moduleName)
         } else {
@@ -245,13 +249,15 @@ class CbmProjectService(private val project: Project) {
             if (idx >= 0) Pair(idx, name) else null
         }
 
+        // 过滤出实际需要变更的模块
+        val toUpdate = indices.filter { (idx, _) -> _modules[idx].includeBuild != value }
+        if (toUpdate.isEmpty()) return
+
         // 乐观更新内存
-        indices.forEach { (idx, name) ->
+        toUpdate.forEach { (idx, name) ->
             _modules[idx] = _modules[idx].copy(includeBuild = value)
             if (value) _enabledModules.add(name) else _enabledModules.remove(name)
         }
-        // 标记有未同步的更改，需要等 Sync 后才生效
-        _hasUnsavedChanges = true
         notifyListeners()
 
         ApplicationManager.getApplication().executeOnPooledThread {
