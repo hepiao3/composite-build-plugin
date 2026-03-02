@@ -2,6 +2,7 @@
     <id>com.jdme.composite-build-manager</id>
     <name>Composite Build Manager</name>
     <vendor>JDME</vendor>
+    <icon>/icons/composite_build.png</icon>
 
     <description><![CDATA[
         管理 Android 多模块复合构建（Composite Build）配置。<br/>
@@ -28,7 +29,7 @@
             displayName="Composite Build"
             factoryClass="com.jdme.cbm.ui.CompositeBuildToolWindow"
             anchor="right"
-            icon="/icons/composite_build.svg"
+            icon="/icons/composite_build.png"
         />
 
         <!-- 持久化：记住用户手动指定的配置文件路径 -->
