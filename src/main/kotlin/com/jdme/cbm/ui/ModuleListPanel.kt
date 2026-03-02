@@ -186,9 +186,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
                 // Messages.NO: 继续切换配置（即使目录不存在）
             }
         }
-        service.setIncludeBuild(module.name, value) {
-            askForSync()
-        }
+        service.setIncludeBuild(module.name, value)
     }
 
     private fun onDownloadClick(row: Int) {
@@ -208,7 +206,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
                 // 重新加载以更新 localDirExists 状态
                 service.loadModules {
                     if (!module.includeBuild) {
-                        service.setIncludeBuild(module.name, true) { askForSync() }
+                        service.setIncludeBuild(module.name, true)
                     }
                 }
             }
@@ -237,27 +235,13 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             if (choice != Messages.YES) return
         }
 
-        service.setIncludeBuildBatch(allNames, true) { askForSync() }
+        service.setIncludeBuildBatch(allNames, true)
     }
 
     private fun onAllMaven() {
         val allNames = service.modules.filter { it.includeBuild }.map { it.name }
         if (allNames.isEmpty()) return
-        service.setIncludeBuildBatch(allNames, false) { askForSync() }
-    }
-
-    private fun askForSync() {
-        val choice = Messages.showYesNoDialog(
-            project,
-            "配置已更新，是否立即 Sync Gradle？",
-            "Sync Gradle",
-            "立即 Sync",
-            "稍后手动 Sync",
-            Messages.getQuestionIcon()
-        )
-        if (choice == Messages.YES) {
-            GradleSyncTrigger.sync(project)
-        }
+        service.setIncludeBuildBatch(allNames, false)
     }
 
     private fun getOrCreateConsole(): ConsoleView {

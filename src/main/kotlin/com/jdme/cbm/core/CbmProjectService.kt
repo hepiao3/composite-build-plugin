@@ -25,7 +25,13 @@ class CbmProjectService(private val project: Project) {
 
     private val LOG = logger<CbmProjectService>()
 
-    private val projectRoot: File get() = File(project.basePath ?: "")
+    private val projectRoot: File get() {
+        val path = project.basePath
+        if (path.isNullOrBlank()) {
+            LOG.warn("project.basePath is null or blank, state file may be created in wrong location")
+        }
+        return File(path ?: "")
+    }
 
     val configFile: File
         get() {
@@ -89,6 +95,7 @@ class CbmProjectService(private val project: Project) {
      */
     private fun saveEnabledModulesToStateFile() {
         val file = stateFile
+        LOG.info("Attempting to save state file to: ${file.absolutePath}")
         try {
             val sb = StringBuilder()
             sb.appendLine("{")
