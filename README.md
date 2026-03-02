@@ -12,11 +12,13 @@
 | 下载缺失模块 | 点击「↓ 下载」按钮自动克隆缺失的子模块 |
 | Gradle Sync | 配置变更后一键触发 Gradle 同步 |
 | 右键菜单 | 在 Project 视图中右键 → Composite Build 快速访问 |
+| 状态提示 | 勾选模块后显示"待Sync生效"提示，避免误操作 |
+| 自动刷新 | 面板显示或收起/展开时自动刷新最新勾选状态 |
 
 ## 构建插件
 
 ```bash
-cd tools/composite-build-plugin
+cd composite-build-plugin/
 ./gradlew buildPlugin
 ```
 
