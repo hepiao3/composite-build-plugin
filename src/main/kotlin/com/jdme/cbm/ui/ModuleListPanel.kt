@@ -299,13 +299,18 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
     // ─── Cell Renderers / Editors ──────────────────────────
 
     private inner class CheckBoxRenderer : javax.swing.table.TableCellRenderer {
-        private val cb = JCheckBox().apply { horizontalAlignment = SwingConstants.CENTER }
+        private val cb = JCheckBox().apply {
+            horizontalAlignment = SwingConstants.CENTER
+            border = BorderFactory.createEmptyBorder()
+        }
         override fun getTableCellRendererComponent(
             table: JTable, value: Any?, isSelected: Boolean,
             hasFocus: Boolean, row: Int, col: Int
         ): java.awt.Component {
             cb.isSelected = value as? Boolean ?: false
             cb.background = if (isSelected) table.selectionBackground else table.background
+            // 设置不透明确保背景完全覆盖，防止相邻列溢出
+            cb.isOpaque = true
             return cb
         }
     }
@@ -344,6 +349,8 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
                 ModuleStatus.MAVEN -> java.awt.Color(0x2196F3)
                 null -> table.foreground
             }
+            // 关键：防止文本溢出到相邻列（默认边框即可，Swing 会自动裁剪）
+            toolTipText = if (status != null) status.displayName else null
             return comp
         }
     }
