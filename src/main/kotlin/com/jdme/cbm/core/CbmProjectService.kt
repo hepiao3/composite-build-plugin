@@ -53,6 +53,19 @@ class CbmProjectService(private val project: Project) {
     private var _enabledModules: MutableSet<String> = mutableSetOf()
     val enabledModules: Set<String> get() = _enabledModules.toSet()
 
+    /** 是否有未同步到 Gradle 的更改（用户已勾选但还未 Sync） */
+    private var _hasUnsavedChanges: Boolean = false
+    val hasUnsavedChanges: Boolean get() = _hasUnsavedChanges
+
+    /**
+     * 标记已同步完成，清除待 Sync 提示。
+     * 在用户点击 Sync Gradle 后调用。
+     */
+    fun markAsSynced() {
+        _hasUnsavedChanges = false
+        notifyListeners()
+    }
+
     // ========== 状态文件读写 ==========
 
     /**
@@ -171,6 +184,8 @@ class CbmProjectService(private val project: Project) {
                 _modules = _modules.map { module ->
                     module.copy(includeBuild = _enabledModules.contains(module.name))
                 }.toMutableList()
+                // 从文件刷新后，已同步到最新状态
+                _hasUnsavedChanges = false
 
                 ApplicationManager.getApplication().invokeLater {
                     notifyListeners()
@@ -196,17 +211,19 @@ class CbmProjectService(private val project: Project) {
 
         // 更新内存状态
         _modules[idx] = _modules[idx].copy(includeBuild = value)
+        // 标记有未同步的更改，需要等 Sync 后才生效
+        _hasUnsavedChanges = true
         if (value) {
             _enabledModules.add(moduleName)
         } else {
             _enabledModules.remove(moduleName)
         }
-        notifyListeners()
 
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
                 saveEnabledModulesToStateFile()
                 LOG.info("$moduleName.includeBuild = $value  [state file saved]")
+                ApplicationManager.getApplication().invokeLater { notifyListeners() }
             } catch (e: Exception) {
                 LOG.error("Failed to save state file", e)
                 // 回滚内存状态
@@ -233,6 +250,8 @@ class CbmProjectService(private val project: Project) {
             _modules[idx] = _modules[idx].copy(includeBuild = value)
             if (value) _enabledModules.add(name) else _enabledModules.remove(name)
         }
+        // 标记有未同步的更改，需要等 Sync 后才生效
+        _hasUnsavedChanges = true
         notifyListeners()
 
         ApplicationManager.getApplication().executeOnPooledThread {
@@ -248,6 +267,8 @@ class CbmProjectService(private val project: Project) {
                 }
                 ApplicationManager.getApplication().invokeLater { notifyListeners() }
             }
+            // 无论成功或失败都需要刷新 UI（成功时在上面的 notifyListeners() 已调用，这里确保也执行）
+            ApplicationManager.getApplication().invokeLater { notifyListeners() }
             ApplicationManager.getApplication().invokeLater { onComplete?.invoke() }
         }
     }
