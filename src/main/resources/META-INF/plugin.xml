@@ -1,0 +1,68 @@
+<idea-plugin>
+    <id>com.jdme.composite-build-manager</id>
+    <name>Composite Build Manager</name>
+    <vendor>JDME</vendor>
+
+    <description><![CDATA[
+        管理 Android 多模块复合构建（Composite Build）配置。<br/>
+        通过侧边面板一键切换任意子模块的 includeBuild 模式，并自动触发 Gradle Sync。<br/><br/>
+        功能：
+        <ul>
+          <li>可视化展示所有子模块的 LOCAL / MAVEN / MISSING 状态</li>
+          <li>一键切换 includeBuild 模式（自动生成/修改 include_build.gradle）</li>
+          <li>支持一键下载缺失模块（委托 Node.js 脚本或 git clone）</li>
+          <li>集成 Gradle Sync 触发</li>
+        </ul>
+    ]]></description>
+
+    <!-- 兼容 Android Studio Hedgehog (2023.3.1) 及以上 -->
+    <idea-version since-build="233" until-build="251.*"/>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.gradle</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- Tool Window：侧边面板 -->
+        <toolWindow
+            id="Composite Build"
+            displayName="Composite Build"
+            factoryClass="com.jdme.cbm.ui.CompositeBuildToolWindow"
+            anchor="right"
+            icon="/icons/composite_build.svg"
+        />
+
+        <!-- 持久化：记住用户手动指定的配置文件路径 -->
+        <applicationService
+            serviceImplementation="com.jdme.cbm.core.CbmSettings"
+        />
+
+        <!-- 项目级服务：业务逻辑协调层 -->
+        <projectService
+            serviceImplementation="com.jdme.cbm.core.CbmProjectService"
+        />
+    </extensions>
+
+    <actions>
+        <!-- 右键菜单：切换构建模式 -->
+        <group
+            id="com.jdme.cbm.CompositeBuildMenu"
+            text="Composite Build"
+            popup="true">
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+
+            <action
+                id="com.jdme.cbm.SwitchBuildMode"
+                class="com.jdme.cbm.actions.SwitchBuildModeAction"
+                text="切换构建模式…"
+                description="切换选中模块的 includeBuild 状态"
+            />
+
+            <action
+                id="com.jdme.cbm.SyncGradle"
+                class="com.jdme.cbm.actions.SyncGradleAction"
+                text="Sync Gradle Now"
+                description="立即触发 Gradle 同步"
+            />
+        </group>
+    </actions>
+</idea-plugin>
