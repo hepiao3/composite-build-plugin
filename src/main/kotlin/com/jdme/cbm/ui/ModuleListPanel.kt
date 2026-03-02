@@ -342,7 +342,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         ): java.awt.Component {
             val comp = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, col)
             val status = value as? ModuleStatus
-            text = if (status != null) "${status.icon} ${status.displayName}" else ""
+            text = status?.displayName ?: ""
             foreground = when (status) {
                 ModuleStatus.LOCAL -> java.awt.Color(0x4CAF50)
                 ModuleStatus.MISSING -> java.awt.Color(0xFF9800)

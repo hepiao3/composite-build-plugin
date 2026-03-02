@@ -38,9 +38,9 @@ data class ModuleConfig(
  * - [MISSING] : includeBuild=true 但本地目录不存在，需要先下载
  */
 enum class ModuleStatus(val displayName: String, val icon: String) {
-    LOCAL("LOCAL", "🔗"),
-    MAVEN("MAVEN", "📦"),
-    MISSING("未下载", "⚠")
+    LOCAL("LOCAL", ""),
+    MAVEN("MAVEN", ""),
+    MISSING("未下载", "")
 }
 
 /** 根据主工程根目录检测模块本地目录是否存在 */
