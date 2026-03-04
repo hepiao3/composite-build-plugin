@@ -46,7 +46,9 @@ intellijPlatform {
 
         ideaVersion {
             sinceBuild = providers.gradleProperty("pluginSinceBuild")
-            untilBuild = providers.gradleProperty("pluginUntilBuild")
+            // 无版本上限，不设置 untilBuild
+            // 通过设置一个很大的版本号来覆盖 platformVersion 自动推断的值
+            untilBuild.convention(providers.provider { "999.0" })
         }
     }
 
