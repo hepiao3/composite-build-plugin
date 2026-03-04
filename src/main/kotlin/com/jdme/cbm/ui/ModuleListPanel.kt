@@ -114,7 +114,8 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
                 }
                 getColumn(COL_BRANCH).apply {
                     headerValue = "分支"
-                    maxWidth = JBUI.scale(180)
+                    maxWidth = JBUI.scale(200)
+                    minWidth = JBUI.scale(120)
                 }
                 getColumn(COL_ACTION).apply {
                     headerValue = ""
