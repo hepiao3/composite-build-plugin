@@ -52,3 +52,26 @@ fun ModuleConfig.checkLocalDir(projectRoot: File): Boolean {
 /** 复制一份并更新 localDirExists（基于最新文件系统状态） */
 fun ModuleConfig.withRefreshedDirStatus(projectRoot: File): ModuleConfig =
     copy(localDirExists = checkLocalDir(projectRoot))
+
+/** 获取本地 Git 仓库的当前分支（如果本地目录存在） */
+fun ModuleConfig.getLocalGitBranch(projectRoot: File): String? {
+    if (!localDirExists) return null
+    val parentDir = projectRoot.parentFile ?: return null
+    val localDir = File(parentDir, localDirName)
+    return getGitBranch(localDir)
+}
+
+/** 执行 git 命令获取当前分支 */
+private fun getGitBranch(dir: File): String? {
+    if (!dir.isDirectory) return null
+    try {
+        val process = ProcessBuilder("git", "rev-parse", "--abbrev-ref", "HEAD")
+            .directory(dir)
+            .redirectError(ProcessBuilder.Redirect.DISCARD)
+            .start()
+        val result = process.inputStream.bufferedReader().readText().trim()
+        return if (process.waitFor() == 0 && result.isNotEmpty()) result else null
+    } catch (e: Exception) {
+        return null
+    }
+}

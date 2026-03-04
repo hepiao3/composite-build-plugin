@@ -14,6 +14,7 @@ import com.jdme.cbm.core.GradleSyncTrigger
 import com.jdme.cbm.core.ModuleDownloader
 import com.jdme.cbm.model.ModuleConfig
 import com.jdme.cbm.model.ModuleStatus
+import com.jdme.cbm.model.getLocalGitBranch
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
@@ -87,6 +88,8 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
                 service.refreshFromStateFile()
                 service.markAsSynced()
                 GradleSyncTrigger.sync(project)
+                // 刷新表格以更新本地 Git 分支信息
+                refreshTable()
             }
         }
         topPanel.add(searchField, BorderLayout.CENTER)
@@ -296,7 +299,11 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
                 COL_CHECKED -> m.includeBuild
                 COL_NAME -> m.name
                 COL_STATUS -> m.status
-                COL_BRANCH -> m.branch
+                COL_BRANCH -> {
+                    // 如果本地存在，读取本地 Git 分支；否则显示配置中的分支
+                    val localBranch = m.getLocalGitBranch(java.io.File(project.basePath ?: ""))
+                    localBranch ?: m.branch
+                }
                 COL_ACTION -> if (m.status == ModuleStatus.MISSING) "↓ 下载" else ""
                 else -> ""
             }
