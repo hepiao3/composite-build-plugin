@@ -27,6 +27,7 @@ object GradleSyncTrigger {
     fun sync(project: Project) {
         LOG.info("Triggering Gradle sync for project: ${project.name}")
         try {
+            @Suppress("DEPRECATION")
             ExternalSystemUtil.refreshProjects(
                 ImportSpecBuilder(project, GradleConstants.SYSTEM_ID)
                     .forceWhenUptodate(true)
