@@ -2,10 +2,14 @@ package com.jdme.cbm.ui
 
 import com.intellij.execution.filters.TextConsoleBuilderFactory
 import com.intellij.execution.ui.ConsoleView
+import com.intellij.icons.AllIcons
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
+import com.intellij.openapi.ui.popup.JBPopup
+import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.ui.SearchTextField
 import com.intellij.ui.components.JBLabel
+import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.table.JBTable
 import com.intellij.util.ui.JBUI
@@ -15,12 +19,28 @@ import com.jdme.cbm.core.ModuleDownloader
 import com.jdme.cbm.model.ModuleConfig
 import com.jdme.cbm.model.ModuleStatus
 import com.jdme.cbm.model.getLocalGitBranch
+import com.jdme.cbm.model.getAllBranches
+import com.jdme.cbm.model.checkoutBranch
+import com.jdme.cbm.model.hasUncommittedChanges
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
+import java.awt.Graphics
 import java.awt.event.ComponentAdapter
 import java.awt.event.ComponentEvent
-import javax.swing.*
+import javax.swing.AbstractCellEditor
+import javax.swing.BorderFactory
+import javax.swing.DefaultCellEditor
+import javax.swing.JButton
+import javax.swing.JCheckBox
+import javax.swing.JComboBox
+import javax.swing.JLabel
+import javax.swing.JPanel
+import javax.swing.JTable
+import javax.swing.JTextField
+import javax.swing.ListSelectionModel
+import javax.swing.SwingConstants
+import javax.swing.SwingUtilities
 import javax.swing.table.AbstractTableModel
 import javax.swing.table.DefaultTableCellRenderer
 
@@ -100,6 +120,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             setShowGrid(false)
             rowHeight = JBUI.scale(28)
             intercellSpacing = Dimension(0, 0)
+            expandableItemsHandler.setEnabled(false)
             columnModel.apply {
                 getColumn(COL_CHECKED).apply {
                     maxWidth = JBUI.scale(30)
@@ -116,6 +137,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
                     headerValue = "分支"
                     maxWidth = JBUI.scale(200)
                     minWidth = JBUI.scale(120)
+                    cellRenderer = BranchRenderer()
                 }
                 getColumn(COL_ACTION).apply {
                     headerValue = ""
@@ -133,6 +155,18 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
 
         val scrollPane = JBScrollPane(table)
+
+        // 分支列点击监听（整个单元格均可触发）
+        table.addMouseListener(object : java.awt.event.MouseAdapter() {
+            override fun mousePressed(e: java.awt.event.MouseEvent) {
+                val col = table.columnAtPoint(e.point)
+                val row = table.rowAtPoint(e.point)
+                if (col != COL_BRANCH || row < 0) return
+                val module = displayedModules.getOrNull(row) ?: return
+                if (module.status != ModuleStatus.LOCAL) return
+                showBranchPopup(row, module)
+            }
+        })
 
         // ─── 底栏 ───────────────────────────────────────────
         val bottomPanel = JPanel(BorderLayout()).apply {
@@ -263,6 +297,121 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         service.setIncludeBuildBatch(allNames, false)
     }
 
+    private fun showBranchPopup(row: Int, module: ModuleConfig) {
+        val projectRoot = java.io.File(project.basePath ?: "")
+        val allBranches = module.getAllBranches(projectRoot)
+        val currentBranch = module.getLocalGitBranch(projectRoot) ?: module.branch
+
+        // 当前分支置顶，其余按原顺序
+        val sortedBranches = listOf(currentBranch) + allBranches.filter { it != currentBranch }
+
+        val listModel = javax.swing.DefaultListModel<String>()
+        sortedBranches.forEach { listModel.addElement(it) }
+        val branchList = JBList(listModel)
+        branchList.selectionMode = ListSelectionModel.SINGLE_SELECTION
+        branchList.setCellRenderer(object : javax.swing.DefaultListCellRenderer() {
+            override fun getListCellRendererComponent(
+                list: javax.swing.JList<*>, value: Any?, index: Int,
+                isSelected: Boolean, cellHasFocus: Boolean
+            ): java.awt.Component {
+                val comp = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus)
+                val branch = value as? String ?: ""
+                text = branch
+                if (branch == currentBranch) {
+                    icon = AllIcons.Actions.Checked
+                    horizontalTextPosition = SwingConstants.LEFT
+                } else {
+                    icon = null
+                }
+                return comp
+            }
+        })
+
+        val searchField = SearchTextField()
+        searchField.textEditor.emptyText.text = "搜索分支..."
+
+        fun filterList() {
+            val q = searchField.text.trim().lowercase()
+            listModel.clear()
+            val filtered = if (q.isEmpty()) sortedBranches
+                           else sortedBranches.filter { it.lowercase().contains(q) }
+            filtered.forEach { listModel.addElement(it) }
+        }
+        searchField.addDocumentListener(object : javax.swing.event.DocumentListener {
+            override fun insertUpdate(e: javax.swing.event.DocumentEvent) = filterList()
+            override fun removeUpdate(e: javax.swing.event.DocumentEvent) = filterList()
+            override fun changedUpdate(e: javax.swing.event.DocumentEvent) = filterList()
+        })
+
+        val popupPanel = JPanel(BorderLayout(0, JBUI.scale(4))).apply {
+            border = JBUI.Borders.empty(6)
+            preferredSize = Dimension(JBUI.scale(480), JBUI.scale(300))
+            add(searchField, BorderLayout.NORTH)
+            add(JBScrollPane(branchList), BorderLayout.CENTER)
+        }
+
+        val popup = JBPopupFactory.getInstance()
+            .createComponentPopupBuilder(popupPanel, searchField.textEditor)
+            .setRequestFocus(true)
+            .createPopup()
+
+        fun selectAndClose() {
+            val selected = branchList.selectedValue ?: return
+            popup.cancel()
+            onBranchSelected(row, selected)
+        }
+
+        branchList.addMouseListener(object : java.awt.event.MouseAdapter() {
+            override fun mouseClicked(e: java.awt.event.MouseEvent) = selectAndClose()
+        })
+        branchList.addKeyListener(object : java.awt.event.KeyAdapter() {
+            override fun keyPressed(e: java.awt.event.KeyEvent) {
+                if (e.keyCode == java.awt.event.KeyEvent.VK_ENTER) selectAndClose()
+            }
+        })
+
+        val tableScreenLoc = table.locationOnScreen
+        val cellRect = table.getCellRect(row, COL_BRANCH, false)
+        popup.showInScreenCoordinates(
+            table,
+            java.awt.Point(tableScreenLoc.x + cellRect.x, tableScreenLoc.y + cellRect.y + cellRect.height)
+        )
+    }
+
+    private fun onBranchSelected(row: Int, branchName: String) {
+        val module = displayedModules.getOrNull(row) ?: return
+        if (module.status != ModuleStatus.LOCAL) return
+
+        val projectRoot = java.io.File(project.basePath ?: "")
+
+        // 切换前检查是否有未提交修改
+        if (module.hasUncommittedChanges(projectRoot)) {
+            val choice = Messages.showYesNoDialog(
+                project,
+                "模块 ${module.name} 存在未提交的修改。\n\n" +
+                "强制切换分支可能导致修改丢失，建议先 commit 或 stash。\n\n" +
+                "是否仍要切换到 $branchName？",
+                "存在未提交修改",
+                "继续切换",
+                "取消",
+                Messages.getWarningIcon()
+            )
+            if (choice != Messages.YES) return
+        }
+
+        val error = module.checkoutBranch(projectRoot, branchName)
+        if (error == null) {
+            refreshTable()
+        } else {
+            Messages.showMessageDialog(
+                project,
+                "切换到分支 $branchName 失败。\n\n$error",
+                "切换分支失败",
+                Messages.getErrorIcon()
+            )
+        }
+    }
+
     private fun getOrCreateConsole(): ConsoleView {
         if (consoleView == null) {
             consoleView = TextConsoleBuilderFactory.getInstance()
@@ -316,7 +465,8 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
 
         override fun isCellEditable(row: Int, col: Int) =
-            col == COL_CHECKED || (col == COL_ACTION && data[row].status == ModuleStatus.MISSING)
+            col == COL_CHECKED ||
+            (col == COL_ACTION && data[row].status == ModuleStatus.MISSING)
     }
 
     // ─── Cell Renderers / Editors ──────────────────────────
@@ -415,4 +565,47 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
 
         override fun getCellEditorValue(): Any = btn.text
     }
+
+    /** 分支列的 Renderer：显示分支名和下拉箭头，LOCAL 状态时鼠标变为手型 */
+    private inner class BranchRenderer : DefaultTableCellRenderer() {
+        private var currentRow: Int = -1
+
+        override fun getTableCellRendererComponent(
+            table: JTable, value: Any?, isSelected: Boolean,
+            hasFocus: Boolean, row: Int, col: Int
+        ): java.awt.Component {
+            currentRow = row
+            val comp = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, col)
+            text = value as? String ?: ""
+            val module = displayedModules.getOrNull(row)
+            val isLocal = module?.status == ModuleStatus.LOCAL
+
+            // LOCAL 状态时显示可点击的样式，并为箭头预留右侧空间
+            cursor = if (isLocal) {
+                java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR)
+            } else {
+                java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.DEFAULT_CURSOR)
+            }
+            toolTipText = if (isLocal) "点击切换分支" else null
+            border = if (isLocal) {
+                BorderFactory.createEmptyBorder(0, 2, 0, JBUI.scale(20))
+            } else {
+                BorderFactory.createEmptyBorder(0, 2, 0, 2)
+            }
+
+            return comp
+        }
+
+        override fun paint(g: Graphics) {
+            super.paint(g)
+            val module = displayedModules.getOrNull(currentRow) ?: return
+            if (module.status != ModuleStatus.LOCAL) return
+
+            val icon = AllIcons.General.ArrowDown
+            val x = width - icon.iconWidth - JBUI.scale(4)
+            val y = (height - icon.iconHeight) / 2
+            icon.paintIcon(this, g, x, y)
+        }
+    }
+
 }
