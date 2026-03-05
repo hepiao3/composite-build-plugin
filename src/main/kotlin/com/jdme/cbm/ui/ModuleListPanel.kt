@@ -22,12 +22,15 @@ import com.jdme.cbm.model.getLocalGitBranch
 import com.jdme.cbm.model.getAllBranches
 import com.jdme.cbm.model.checkoutBranch
 import com.jdme.cbm.model.hasUncommittedChanges
+import com.intellij.openapi.application.ApplicationManager
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
 import java.awt.Graphics
 import java.awt.event.ComponentAdapter
 import java.awt.event.ComponentEvent
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.swing.AbstractCellEditor
 import javax.swing.BorderFactory
 import javax.swing.DefaultCellEditor
@@ -65,10 +68,15 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val table = JBTable(tableModel)
     private val searchField = SearchTextField()
     private val statusLabel = JBLabel("")
+    private val syncBtn = JButton("⟳ Sync Gradle")
     private var consoleView: ConsoleView? = null
 
     // 当前展示的（过滤后的）模块列表
     private var displayedModules: List<ModuleConfig> = emptyList()
+
+    // 分支名缓存：moduleName -> 当前本地分支名
+    private val branchCache = ConcurrentHashMap<String, String>()
+    private val branchLoadInProgress = AtomicBoolean(false)
 
     init {
         buildUI()
@@ -102,18 +110,27 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
                 override fun changedUpdate(e: javax.swing.event.DocumentEvent) = applyFilter()
             })
         }
-        val syncBtn = JButton("⟳ Sync Gradle").apply {
+        val refreshBranchBtn = JButton("↺ Refresh Branch").apply {
+            toolTipText = "Reload local Git branch for each module"
             addActionListener {
-                // 先从状态文件同步勾选状态，再触发 Gradle Sync
-                service.refreshFromStateFile()
-                service.markAsSynced()
-                GradleSyncTrigger.sync(project)
-                // 刷新表格以更新本地 Git 分支信息
-                refreshTable()
+                branchCache.clear()
+                loadBranchesAsync()
             }
         }
+        syncBtn.addActionListener {
+            // 先从状态文件同步勾选状态，再触发 Gradle Sync
+            service.refreshFromStateFile()
+            service.markAsSynced()
+            GradleSyncTrigger.sync(project)
+            refreshTable()
+        }
+        val eastPanel = JPanel(FlowLayout(FlowLayout.RIGHT, JBUI.scale(4), 0)).apply {
+            isOpaque = false
+            add(refreshBranchBtn)
+            add(syncBtn)
+        }
         topPanel.add(searchField, BorderLayout.CENTER)
-        topPanel.add(syncBtn, BorderLayout.EAST)
+        topPanel.add(eastPanel, BorderLayout.EAST)
 
         // ─── 表格 ───────────────────────────────────────────
         table.apply {
@@ -121,28 +138,35 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             rowHeight = JBUI.scale(28)
             intercellSpacing = Dimension(0, 0)
             expandableItemsHandler.setEnabled(false)
+            autoResizeMode = javax.swing.JTable.AUTO_RESIZE_OFF
             columnModel.apply {
                 getColumn(COL_CHECKED).apply {
                     maxWidth = JBUI.scale(30)
                     minWidth = JBUI.scale(30)
+                    preferredWidth = JBUI.scale(30)
                     headerValue = ""
                 }
-                getColumn(COL_NAME).headerValue = "模块名"
+                getColumn(COL_NAME).apply {
+                    headerValue = "模块名"
+                    preferredWidth = JBUI.scale(150)
+                }
                 getColumn(COL_STATUS).apply {
                     headerValue = "状态"
                     maxWidth = JBUI.scale(100)
                     minWidth = JBUI.scale(80)
+                    preferredWidth = JBUI.scale(90)
                 }
                 getColumn(COL_BRANCH).apply {
                     headerValue = "分支"
-                    maxWidth = JBUI.scale(200)
                     minWidth = JBUI.scale(120)
+                    preferredWidth = JBUI.scale(160)
                     cellRenderer = BranchRenderer()
                 }
                 getColumn(COL_ACTION).apply {
                     headerValue = ""
                     maxWidth = JBUI.scale(70)
                     minWidth = JBUI.scale(70)
+                    preferredWidth = JBUI.scale(70)
                     cellRenderer = ButtonRenderer()
                     cellEditor = ButtonEditor(table, ::onDownloadClick)
                 }
@@ -155,6 +179,13 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
 
         val scrollPane = JBScrollPane(table)
+
+        val resizeDebounce = javax.swing.Timer(80) { adjustBranchWidth() }.apply { isRepeats = false }
+        scrollPane.viewport.addComponentListener(object : ComponentAdapter() {
+            override fun componentResized(e: ComponentEvent) {
+                resizeDebounce.restart()
+            }
+        })
 
         // 分支列点击监听（整个单元格均可触发）
         table.addMouseListener(object : java.awt.event.MouseAdapter() {
@@ -173,10 +204,10 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             border = JBUI.Borders.empty(4, 8)
         }
         val buttonPanel = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(4), 0))
-        val allLocalBtn = JButton("全部切 LOCAL").apply {
+        val allLocalBtn = JButton("ALL LOCAL").apply {
             addActionListener { onAllLocal() }
         }
-        val allMavenBtn = JButton("全部切 MAVEN").apply {
+        val allMavenBtn = JButton("ALL MAVEN").apply {
             addActionListener { onAllMaven() }
         }
         buttonPanel.add(allLocalBtn)
@@ -202,10 +233,63 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
         tableModel.setData(displayedModules)
         updateStatusLabel()
+        adjustBranchWidth()
+    }
+
+    private fun adjustBranchWidth() {
+        val cm = table.columnModel
+        val scrollPane = (table.parent?.parent) as? javax.swing.JScrollPane ?: return
+        val viewportWidth = scrollPane.viewport.width
+        if (viewportWidth <= 0) return
+        // 无 MISSING 模块时隐藏 ACTION 列，让分支列贴紧右侧
+        val hasMissing = displayedModules.any { it.status == ModuleStatus.MISSING }
+        val actionWidth = if (hasMissing) JBUI.scale(70) else 0
+        cm.getColumn(COL_ACTION).apply {
+            minWidth = actionWidth
+            maxWidth = actionWidth
+            preferredWidth = actionWidth
+        }
+        val otherWidth = (0 until cm.columnCount)
+            .filter { it != COL_BRANCH }
+            .sumOf { cm.getColumn(it).preferredWidth }
+        val newWidth = maxOf(JBUI.scale(120), viewportWidth - otherWidth)
+        cm.getColumn(COL_BRANCH).preferredWidth = newWidth
+        table.revalidate()
+        table.repaint()
     }
 
     private fun refreshTable() {
         applyFilter()
+        loadBranchesAsync()
+    }
+
+    /**
+     * 在后台线程批量执行 git rev-parse，完成后回到 EDT 刷新分支列。
+     * 用 AtomicBoolean 防止并发重入。
+     */
+    private fun loadBranchesAsync() {
+        if (!branchLoadInProgress.compareAndSet(false, true)) return
+        val projectRoot = java.io.File(project.basePath ?: "")
+        // 只需加载 LOCAL 状态的模块（其他状态不显示分支或无本地目录）
+        val localModules = service.modules.filter { it.status == ModuleStatus.LOCAL }
+        ApplicationManager.getApplication().executeOnPooledThread {
+            try {
+                for (module in localModules) {
+                    val branch = module.getLocalGitBranch(projectRoot)
+                    if (branch != null) {
+                        branchCache[module.name] = branch
+                    }
+                }
+            } finally {
+                branchLoadInProgress.set(false)
+            }
+            SwingUtilities.invokeLater {
+                val rowCount = tableModel.rowCount
+                if (rowCount > 0) {
+                    tableModel.fireTableRowsUpdated(0, rowCount - 1)
+                }
+            }
+        }
     }
 
     private fun updateStatusLabel() {
@@ -214,11 +298,17 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         val mavenCount = all.count { it.status == ModuleStatus.MAVEN }
         val missingCount = all.count { it.status == ModuleStatus.MISSING }
         statusLabel.text = buildString {
-            if (service.hasUnsavedChanges) {
-                append("⚠ 待 Sync 生效 | ")
-            }
             append("LOCAL: $localCount / MAVEN: $mavenCount")
             if (missingCount > 0) append(" / 未下载: $missingCount")
+        }
+        if (service.hasUnsavedChanges) {
+            syncBtn.text = "⚠ Sync Gradle"
+            syncBtn.foreground = java.awt.Color(0xE65100)
+            syncBtn.toolTipText = "有未同步的改动，点击使配置生效"
+        } else {
+            syncBtn.text = "⟳ Sync Gradle"
+            syncBtn.foreground = null
+            syncBtn.toolTipText = null
         }
     }
 
@@ -401,7 +491,10 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
 
         val error = module.checkoutBranch(projectRoot, branchName)
         if (error == null) {
-            refreshTable()
+            // 直接更新缓存，无需重跑 git
+            branchCache[module.name] = branchName
+            val rowCount = tableModel.rowCount
+            if (rowCount > 0) tableModel.fireTableRowsUpdated(0, rowCount - 1)
         } else {
             Messages.showMessageDialog(
                 project,
@@ -449,11 +542,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
                 COL_CHECKED -> m.includeBuild
                 COL_NAME -> m.name
                 COL_STATUS -> m.status
-                COL_BRANCH -> {
-                    // 如果本地存在，读取本地 Git 分支；否则显示配置中的分支
-                    val localBranch = m.getLocalGitBranch(java.io.File(project.basePath ?: ""))
-                    localBranch ?: m.branch
-                }
+                COL_BRANCH -> branchCache[m.name] ?: m.branch
                 COL_ACTION -> if (m.status == ModuleStatus.MISSING) "↓ 下载" else ""
                 else -> ""
             }
@@ -587,11 +676,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
                 java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.DEFAULT_CURSOR)
             }
             toolTipText = if (isLocal) "点击切换分支" else null
-            border = if (isLocal) {
-                BorderFactory.createEmptyBorder(0, 2, 0, JBUI.scale(20))
-            } else {
-                BorderFactory.createEmptyBorder(0, 2, 0, 2)
-            }
+            border = BorderFactory.createEmptyBorder(0, 2, 0, 2)
 
             return comp
         }
@@ -602,9 +687,12 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             if (module.status != ModuleStatus.LOCAL) return
 
             val icon = AllIcons.General.ArrowDown
-            val x = width - icon.iconWidth - JBUI.scale(4)
+            val textWidth = g.fontMetrics.stringWidth(text)
+            val x = JBUI.scale(2) + textWidth + JBUI.scale(4)
             val y = (height - icon.iconHeight) / 2
-            icon.paintIcon(this, g, x, y)
+            if (x + icon.iconWidth <= width) {
+                icon.paintIcon(this, g, x, y)
+            }
         }
     }
 
