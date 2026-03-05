@@ -110,7 +110,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
                 override fun changedUpdate(e: javax.swing.event.DocumentEvent) = applyFilter()
             })
         }
-        val refreshBranchBtn = JButton("↺ Refresh Branch").apply {
+        val refreshBranchBtn = JButton("↺ Refresh").apply {
             toolTipText = "Reload local Git branch for each module"
             addActionListener {
                 branchCache.clear()
