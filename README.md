@@ -2,6 +2,10 @@
 
 管理 Android 多模块复合构建（Composite Build）配置的 Android Studio 插件。
 
+![预览截图](screenshots/preview.png)
+
+![搜索过滤](screenshots/search.png)
+
 ## 功能
 
 | 功能 | 描述 |
@@ -10,9 +14,10 @@
 | 一键切换 | 勾选/取消勾选即可切换 includeBuild，自动写回 JSON5 并重新生成配置 |
 | 批量操作 | 一键将全部模块切换为 LOCAL 或 MAVEN |
 | 下载缺失模块 | 点击「↓ 下载」按钮自动克隆缺失的子模块 |
-| Gradle Sync | 配置变更后一键触发 Gradle 同步 |
+| Gradle Sync | 配置变更后一键触发 Gradle 同步，有未同步改动时按钮高亮提醒 |
+| 分支管理 | 显示各模块当前 Git 分支，支持一键切换（含未提交修改检查） |
+| 搜索过滤 | 支持按模块名搜索过滤 |
 | 右键菜单 | 在 Project 视图中右键 → Composite Build 快速访问 |
-| 状态提示 | 勾选模块后显示"待Sync生效"提示，避免误操作 |
 | 自动刷新 | 面板显示或收起/展开时自动刷新最新勾选状态 |
 
 ## 构建插件
