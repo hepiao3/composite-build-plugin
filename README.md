@@ -2,9 +2,7 @@
 
 管理 Android 多模块复合构建（Composite Build）配置的 Android Studio 插件。
 
-![预览截图](screenshots/preview.png)
-
-![搜索过滤](screenshots/search.png)
+<img src="screenshots/preview.png" width="48%"/> <img src="screenshots/search.png" width="48%"/>
 
 ## 功能
 
