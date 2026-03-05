@@ -3,6 +3,7 @@
     <name>Composite Build Manager</name>
     <vendor>JDME</vendor>
     <description><![CDATA[
+        <img src="https://coding.jd.com/jme/composite-build-plugin/raw/master/screenshots/preview.png" width="600"/><br/><br/>
         管理 Android 多模块复合构建（Composite Build）配置。<br/>
         通过侧边面板可视化管理所有子模块的构建模式，支持一键切换 includeBuild 并自动触发 Gradle Sync。<br/><br/>
         功能：
