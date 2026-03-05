@@ -28,6 +28,7 @@
             factoryClass="com.jdme.cbm.ui.CompositeBuildToolWindow"
             anchor="right"
             icon="/icons/composite_build.svg"
+            defaultWidth="300"
         />
 
         <!-- 持久化：记住用户手动指定的配置文件路径 -->
