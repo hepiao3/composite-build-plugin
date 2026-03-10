@@ -5,6 +5,7 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.jdme.cbm.model.ModuleConfig
+import com.jdme.cbm.model.checkLocalDir
 import java.io.File
 
 /**
@@ -178,16 +179,24 @@ class CbmProjectService(private val project: Project) {
     fun refreshFromStateFile() {
         ApplicationManager.getApplication().executeOnPooledThread {
             val newEnabledModules = loadEnabledModulesFromStateFile()
-            val changed = newEnabledModules != _enabledModules
+            val enabledChanged = newEnabledModules != _enabledModules
 
-            if (changed) {
+            if (enabledChanged) {
                 _enabledModules = newEnabledModules.toMutableSet()
-                // 更新模块的勾选状态
-                _modules = _modules.map { module ->
-                    module.copy(includeBuild = _enabledModules.contains(module.name))
-                }.toMutableList()
-                // 从文件刷新后，已同步到最新状态，更新快照
                 _syncedEnabledModules = _enabledModules.toSet()
+            }
+
+            // 无论勾选状态是否变化，都重新检测本地目录，确保删除目录后状态能及时更新
+            val updatedModules = _modules.map { module ->
+                module.copy(
+                    includeBuild = _enabledModules.contains(module.name),
+                    localDirExists = module.checkLocalDir(projectRoot)
+                )
+            }.toMutableList()
+            val dirChanged = updatedModules.zip(_modules).any { (new, old) -> new.localDirExists != old.localDirExists }
+
+            if (enabledChanged || dirChanged) {
+                _modules = updatedModules
 
                 ApplicationManager.getApplication().invokeLater {
                     notifyListeners()
