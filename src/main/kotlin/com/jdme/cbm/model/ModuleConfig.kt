@@ -87,11 +87,19 @@ fun ModuleConfig.getAllBranches(projectRoot: File): List<String> {
     if (!localDir.isDirectory) return emptyList()
 
     try {
-        // 先执行 git fetch 更新远程引用（可选，不强制要求成功）
+        // 确保 refspec 覆盖所有分支（浅克隆只追踪单分支时需要修正）
+        ProcessBuilder("git", "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*")
+            .directory(localDir)
+            .redirectError(ProcessBuilder.Redirect.DISCARD)
+            .start()
+            .waitFor()
+
+        // 拉取所有远程分支，等待完成（失败时静默忽略）
         ProcessBuilder("git", "fetch", "--all")
             .directory(localDir)
             .redirectError(ProcessBuilder.Redirect.DISCARD)
             .start()
+            .waitFor()
 
         val allBranches = mutableSetOf<String>()
 
@@ -111,22 +119,19 @@ fun ModuleConfig.getAllBranches(projectRoot: File): List<String> {
                 .forEach { allBranches.add(it) }
         }
 
-        // 获取远程分支
-        val remoteProcess = ProcessBuilder("git", "ls-remote", "--heads", url)
+        // 从本地远程跟踪分支读取（fetch 完成后已缓存，无需再次联网）
+        val remoteProcess = ProcessBuilder("git", "branch", "-r")
             .directory(localDir)
             .redirectError(ProcessBuilder.Redirect.DISCARD)
             .start()
-
         val remoteOutput = remoteProcess.inputStream.bufferedReader().readText()
         if (remoteProcess.waitFor() == 0) {
-            // 解析格式：<commit> refs/heads/<branchName>
+            // 格式：  origin/branchName 或  origin/HEAD -> origin/main
             remoteOutput.lineSequence()
+                .map { it.trim() }
+                .filter { it.isNotBlank() && !it.contains("->") }
+                .map { it.substringAfter("/") }
                 .filter { it.isNotBlank() }
-                .map { line ->
-                    val parts = line.split("\t")
-                    if (parts.size == 2) parts[1].removePrefix("refs/heads/") else null
-                }
-                .filterNotNull()
                 .forEach { allBranches.add(it) }
         }
 

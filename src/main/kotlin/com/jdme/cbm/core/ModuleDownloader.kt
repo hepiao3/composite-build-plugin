@@ -6,7 +6,6 @@ import com.intellij.execution.ui.ConsoleViewContentType
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.wm.ToolWindowManager
 import com.jdme.cbm.model.ModuleConfig
 import java.io.File
 import java.io.InputStream
@@ -14,10 +13,7 @@ import java.io.InputStream
 /**
  * 下载（克隆）缺失的子模块到 ../moduleName_project 目录。
  *
- * 策略（优先级由高到低）：
- * 1. 委托现有 Node.js 脚本 `scripts/module_manager/download-projects.js`
- * 2. 若 Node.js 不可用，直接调用 `git clone`
- *
+ * 直接调用 `git clone` 完整克隆指定分支，保留所有远程追踪分支引用。
  * 输出流实时打印到 IDE Run 面板（ConsoleView）。
  */
 object ModuleDownloader {
@@ -65,37 +61,22 @@ object ModuleDownloader {
 
         log(console, "📥 开始下载模块: ${module.name}")
         log(console, "   目标目录: ${targetDir.absolutePath}")
-        log(console, "   分支: ${module.branch}")
+        log(console, "   目标分支: ${module.branch}")
 
-        // 优先尝试 Node.js 脚本
-        if (isNodeAvailable()) {
-            val nodeScript = File(projectRoot, "scripts/module_manager/download-projects.js")
-            if (nodeScript.exists()) {
-                log(console, "   使用 Node.js 脚本下载...")
-                return runProcess(
-                    cmd = listOf("node", nodeScript.absolutePath, "download", module.name),
-                    workDir = projectRoot,
-                    console = console
-                )
-            }
-        }
-
-        // 降级为直接 git clone
-        log(console, "   Node.js 不可用，使用 git clone 降级方案...")
-        return runProcess(
-            cmd = listOf("git", "clone", "--depth=1", "-b", module.branch, module.url, targetDir.absolutePath),
+        val cloneSuccess = runProcess(
+            cmd = listOf("git", "clone", module.url, targetDir.absolutePath),
             workDir = parentDir,
             console = console
         )
-    }
+        if (!cloneSuccess) return false
 
-    private fun isNodeAvailable(): Boolean = try {
-        val proc = ProcessBuilder("node", "--version")
-            .redirectErrorStream(true)
-            .start()
-        proc.waitFor() == 0
-    } catch (e: Exception) {
-        false
+        // clone 默认分支后，切换到配置的目标分支
+        log(console, "🔀 切换到目标分支: ${module.branch}")
+        return runProcess(
+            cmd = listOf("git", "checkout", module.branch),
+            workDir = targetDir,
+            console = console
+        )
     }
 
     private fun runProcess(
