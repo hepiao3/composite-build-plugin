@@ -23,6 +23,7 @@ import com.jdme.cbm.model.getAllBranches
 import com.jdme.cbm.model.checkoutBranch
 import com.jdme.cbm.model.hasUncommittedChanges
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.ui.AnimatedIcon
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
@@ -77,6 +78,16 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
     // 分支名缓存：moduleName -> 当前本地分支名
     private val branchCache = ConcurrentHashMap<String, String>()
     private val branchLoadInProgress = AtomicBoolean(false)
+
+    // 正在下载的模块名集合
+    private val downloadingModules: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+    // 下载期间驱动 loading 动画刷新的定时器（EDT 线程）
+    private val downloadRepaintTimer = javax.swing.Timer(80) {
+        val rowCount = tableModel.rowCount
+        if (rowCount > 0) tableModel.fireTableRowsUpdated(0, rowCount - 1)
+        if (downloadingModules.isEmpty()) (it.source as? javax.swing.Timer)?.stop()
+    }
 
     init {
         buildUI()
@@ -338,6 +349,11 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun downloadModule(module: ModuleConfig) {
+        downloadingModules.add(module.name)
+        if (!downloadRepaintTimer.isRunning) downloadRepaintTimer.start()
+        val rowCount = tableModel.rowCount
+        if (rowCount > 0) tableModel.fireTableRowsUpdated(0, rowCount - 1)
+
         val console = getOrCreateConsole()
         ModuleDownloader.download(
             module = module,
@@ -345,6 +361,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             projectRoot = java.io.File(project.basePath ?: ""),
             console = console
         ) { success ->
+            downloadingModules.remove(module.name)
             if (success) {
                 // 重新加载以更新 localDirExists 状态
                 service.loadModules {
@@ -553,9 +570,10 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             else -> String::class.java
         }
 
-        override fun isCellEditable(row: Int, col: Int) =
-            col == COL_CHECKED ||
-            (col == COL_ACTION && data[row].status == ModuleStatus.MISSING)
+        override fun isCellEditable(row: Int, col: Int): Boolean {
+            if (col == COL_CHECKED && data.getOrNull(row)?.name in downloadingModules) return false
+            return col == COL_CHECKED || (col == COL_ACTION && data[row].status == ModuleStatus.MISSING)
+        }
     }
 
     // ─── Cell Renderers / Editors ──────────────────────────
@@ -565,12 +583,23 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             horizontalAlignment = SwingConstants.CENTER
             border = BorderFactory.createEmptyBorder()
         }
+        private val loadingLabel = JLabel(AnimatedIcon.Default.INSTANCE).apply {
+            horizontalAlignment = SwingConstants.CENTER
+            isOpaque = true
+        }
+
         override fun getTableCellRendererComponent(
             table: JTable, value: Any?, isSelected: Boolean,
             hasFocus: Boolean, row: Int, col: Int
         ): java.awt.Component {
+            val bg = if (isSelected) table.selectionBackground else table.background
+            val module = displayedModules.getOrNull(row)
+            if (module != null && module.name in downloadingModules) {
+                loadingLabel.background = bg
+                return loadingLabel
+            }
             cb.isSelected = value as? Boolean ?: false
-            cb.background = if (isSelected) table.selectionBackground else table.background
+            cb.background = bg
             // 设置不透明确保背景完全覆盖，防止相邻列溢出
             cb.isOpaque = true
             return cb
