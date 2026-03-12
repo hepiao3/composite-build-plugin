@@ -205,7 +205,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
                 val row = table.rowAtPoint(e.point)
                 if (col != COL_BRANCH || row < 0) return
                 val module = displayedModules.getOrNull(row) ?: return
-                if (module.status != ModuleStatus.LOCAL) return
+                if (!module.localDirExists) return
                 showBranchPopup(row, module)
             }
         })
@@ -281,8 +281,8 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun loadBranchesAsync() {
         if (!branchLoadInProgress.compareAndSet(false, true)) return
         val projectRoot = java.io.File(project.basePath ?: "")
-        // 只需加载 LOCAL 状态的模块（其他状态不显示分支或无本地目录）
-        val localModules = service.modules.filter { it.status == ModuleStatus.LOCAL }
+        // 加载本地目录存在的模块（LOCAL 或 MAVEN+本地存在均需加载分支）
+        val localModules = service.modules.filter { it.localDirExists }
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
                 for (module in localModules) {
@@ -487,7 +487,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun onBranchSelected(row: Int, branchName: String) {
         val module = displayedModules.getOrNull(row) ?: return
-        if (module.status != ModuleStatus.LOCAL) return
+        if (!module.localDirExists) return
 
         val projectRoot = java.io.File(project.basePath ?: "")
 
@@ -696,7 +696,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             val comp = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, col)
             text = value as? String ?: ""
             val module = displayedModules.getOrNull(row)
-            val isLocal = module?.status == ModuleStatus.LOCAL
+            val isLocal = module?.localDirExists == true
 
             // LOCAL 状态时显示可点击的样式，并为箭头预留右侧空间
             cursor = if (isLocal) {
@@ -713,7 +713,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         override fun paint(g: Graphics) {
             super.paint(g)
             val module = displayedModules.getOrNull(currentRow) ?: return
-            if (module.status != ModuleStatus.LOCAL) return
+            if (!module.localDirExists) return
 
             val icon = AllIcons.General.ArrowDown
             val textWidth = g.fontMetrics.stringWidth(text)
