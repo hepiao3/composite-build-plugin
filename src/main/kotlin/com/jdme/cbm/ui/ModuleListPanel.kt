@@ -641,7 +641,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
                 null -> table.foreground
             }
             // 关键：防止文本溢出到相邻列（默认边框即可，Swing 会自动裁剪）
-            toolTipText = if (status != null) status.displayName else null
+            toolTipText = null
             return comp
         }
     }
@@ -704,7 +704,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             } else {
                 java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.DEFAULT_CURSOR)
             }
-            toolTipText = if (isLocal) "点击切换分支" else null
+            toolTipText = null
             border = BorderFactory.createEmptyBorder(0, 2, 0, 2)
 
             return comp
