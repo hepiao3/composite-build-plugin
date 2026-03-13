@@ -75,6 +75,13 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
     // 当前展示的（过滤后的）模块列表
     private var displayedModules: List<ModuleConfig> = emptyList()
 
+    // 表头全选复选框
+    private val headerCheckBox = JCheckBox().apply {
+        horizontalAlignment = SwingConstants.CENTER
+        border = BorderFactory.createEmptyBorder()
+        isOpaque = true
+    }
+
     // 分支名缓存：moduleName -> 当前本地分支名
     private val branchCache = ConcurrentHashMap<String, String>()
     private val branchLoadInProgress = AtomicBoolean(false)
@@ -189,6 +196,28 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             columnModel.getColumn(COL_STATUS).cellRenderer = StatusRenderer()
         }
 
+        // 表头全选复选框
+        table.tableHeader.columnModel.getColumn(COL_CHECKED).headerRenderer =
+            object : javax.swing.table.TableCellRenderer {
+                override fun getTableCellRendererComponent(
+                    t: JTable, value: Any?, isSelected: Boolean,
+                    hasFocus: Boolean, row: Int, col: Int
+                ): java.awt.Component {
+                    headerCheckBox.background = table.tableHeader.background
+                    val allChecked = displayedModules.isNotEmpty() && displayedModules.all { it.includeBuild }
+                    headerCheckBox.isSelected = allChecked
+                    return headerCheckBox
+                }
+            }
+        table.tableHeader.addMouseListener(object : java.awt.event.MouseAdapter() {
+            override fun mouseClicked(e: java.awt.event.MouseEvent) {
+                val col = table.tableHeader.columnAtPoint(e.point)
+                if (col != COL_CHECKED) return
+                val allChecked = displayedModules.isNotEmpty() && displayedModules.all { it.includeBuild }
+                if (allChecked) onAllMaven() else onAllLocal()
+            }
+        })
+
         val scrollPane = JBScrollPane(table)
 
         val resizeDebounce = javax.swing.Timer(80) { adjustBranchWidth() }.apply { isRepeats = false }
@@ -214,16 +243,6 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         val bottomPanel = JPanel(BorderLayout()).apply {
             border = JBUI.Borders.empty(4, 8)
         }
-        val buttonPanel = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(4), 0))
-        val allLocalBtn = JButton("ALL LOCAL").apply {
-            addActionListener { onAllLocal() }
-        }
-        val allMavenBtn = JButton("ALL MAVEN").apply {
-            addActionListener { onAllMaven() }
-        }
-        buttonPanel.add(allLocalBtn)
-        buttonPanel.add(allMavenBtn)
-        bottomPanel.add(buttonPanel, BorderLayout.WEST)
         bottomPanel.add(statusLabel, BorderLayout.EAST)
 
         add(topPanel, BorderLayout.NORTH)
@@ -245,6 +264,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         tableModel.setData(displayedModules)
         updateStatusLabel()
         adjustBranchWidth()
+        table.tableHeader.repaint()
     }
 
     private fun adjustBranchWidth() {
@@ -434,8 +454,10 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             }
         })
 
-        val searchField = SearchTextField()
-        searchField.textEditor.emptyText.text = "搜索分支..."
+        val searchField = com.intellij.ui.components.JBTextField().apply {
+            emptyText.text = "搜索分支..."
+            border = JBUI.Borders.empty(2, 4)
+        }
 
         fun filterList() {
             val q = searchField.text.trim().lowercase()
@@ -444,21 +466,23 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
                            else sortedBranches.filter { it.lowercase().contains(q) }
             filtered.forEach { listModel.addElement(it) }
         }
-        searchField.addDocumentListener(object : javax.swing.event.DocumentListener {
+        searchField.document.addDocumentListener(object : javax.swing.event.DocumentListener {
             override fun insertUpdate(e: javax.swing.event.DocumentEvent) = filterList()
             override fun removeUpdate(e: javax.swing.event.DocumentEvent) = filterList()
             override fun changedUpdate(e: javax.swing.event.DocumentEvent) = filterList()
         })
 
+        val cellRect = table.getCellRect(row, COL_BRANCH, false)
+        val popupWidth = JBUI.scale(216)
         val popupPanel = JPanel(BorderLayout(0, JBUI.scale(4))).apply {
             border = JBUI.Borders.empty(6)
-            preferredSize = Dimension(JBUI.scale(480), JBUI.scale(300))
+            preferredSize = Dimension(popupWidth, JBUI.scale(260))
             add(searchField, BorderLayout.NORTH)
             add(JBScrollPane(branchList), BorderLayout.CENTER)
         }
 
         val popup = JBPopupFactory.getInstance()
-            .createComponentPopupBuilder(popupPanel, searchField.textEditor)
+            .createComponentPopupBuilder(popupPanel, searchField)
             .setRequestFocus(true)
             .createPopup()
 
@@ -468,8 +492,23 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             onBranchSelected(row, selected)
         }
 
+        fun isOnItem(point: java.awt.Point): Boolean {
+            val index = branchList.locationToIndex(point)
+            if (index < 0) return false
+            val cellBounds = branchList.getCellBounds(index, index) ?: return false
+            return cellBounds.contains(point)
+        }
         branchList.addMouseListener(object : java.awt.event.MouseAdapter() {
-            override fun mouseClicked(e: java.awt.event.MouseEvent) = selectAndClose()
+            override fun mousePressed(e: java.awt.event.MouseEvent) {
+                if (!isOnItem(e.point)) e.consume()
+            }
+            override fun mouseReleased(e: java.awt.event.MouseEvent) {
+                if (!isOnItem(e.point)) e.consume()
+            }
+            override fun mouseClicked(e: java.awt.event.MouseEvent) {
+                if (!isOnItem(e.point)) { e.consume(); return }
+                selectAndClose()
+            }
         })
         branchList.addKeyListener(object : java.awt.event.KeyAdapter() {
             override fun keyPressed(e: java.awt.event.KeyEvent) {
@@ -478,11 +517,24 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         })
 
         val tableScreenLoc = table.locationOnScreen
-        val cellRect = table.getCellRect(row, COL_BRANCH, false)
-        popup.showInScreenCoordinates(
-            table,
-            java.awt.Point(tableScreenLoc.x + cellRect.x, tableScreenLoc.y + cellRect.y + cellRect.height)
-        )
+        // 右对齐：弹窗右边缘与箭头图标右边缘对齐
+        val branchText = branchCache[module.name] ?: module.branch
+        val fm = table.getFontMetrics(table.font)
+        val textWidth = fm.stringWidth(branchText)
+        val arrowIcon = AllIcons.General.ArrowDown
+        val arrowRightInCell = JBUI.scale(2) + textWidth + JBUI.scale(4) + arrowIcon.iconWidth
+        val popupX = tableScreenLoc.x + cellRect.x + arrowRightInCell - popupWidth
+        val popupHeight = JBUI.scale(260)
+        val screenBounds = table.graphicsConfiguration?.bounds
+            ?: java.awt.Rectangle(java.awt.Toolkit.getDefaultToolkit().screenSize)
+        val spaceBelow = screenBounds.y + screenBounds.height -
+                (tableScreenLoc.y + cellRect.y + cellRect.height)
+        val popupY = if (spaceBelow >= popupHeight) {
+            tableScreenLoc.y + cellRect.y + cellRect.height
+        } else {
+            tableScreenLoc.y + cellRect.y - popupHeight
+        }
+        popup.showInScreenCoordinates(table, java.awt.Point(popupX, popupY))
     }
 
     private fun onBranchSelected(row: Int, branchName: String) {
