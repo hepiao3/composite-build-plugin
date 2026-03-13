@@ -269,7 +269,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             add(filterMavenCheckBox)
         }
         val bottomPanel = JPanel(BorderLayout()).apply {
-            border = JBUI.Borders.empty(4, 8)
+            border = JBUI.Borders.empty(4, 0, 4, 8)
         }
         bottomPanel.add(filterPanel, BorderLayout.WEST)
         bottomPanel.add(statusLabel, BorderLayout.EAST)
