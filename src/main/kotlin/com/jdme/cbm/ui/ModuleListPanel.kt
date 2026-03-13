@@ -134,10 +134,10 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             })
         }
         val refreshBranchBtn = JButton("↺ Refresh").apply {
-            toolTipText = "Reload local Git branch for each module"
+            toolTipText = "从 project-repos.json5 重新加载所有模块"
             addActionListener {
                 branchCache.clear()
-                loadBranchesAsync()
+                service.loadModules()
             }
         }
         syncBtn.addActionListener {
