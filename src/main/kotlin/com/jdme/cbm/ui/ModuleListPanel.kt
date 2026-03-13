@@ -75,6 +75,11 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
     // 当前展示的（过滤后的）模块列表
     private var displayedModules: List<ModuleConfig> = emptyList()
 
+    // 状态筛选复选框
+    private val filterLocalCheckBox = JCheckBox("LOCAL")
+    private val filterMavenCheckBox = JCheckBox("MAVEN")
+    private var filterStatus: ModuleStatus? = null
+
     // 表头全选复选框
     private val headerCheckBox = JCheckBox().apply {
         horizontalAlignment = SwingConstants.CENTER
@@ -240,9 +245,33 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         })
 
         // ─── 底栏 ───────────────────────────────────────────
+        filterLocalCheckBox.addActionListener {
+            if (filterLocalCheckBox.isSelected) {
+                filterMavenCheckBox.isSelected = false
+                filterStatus = ModuleStatus.LOCAL
+            } else {
+                filterStatus = null
+            }
+            applyFilter()
+        }
+        filterMavenCheckBox.addActionListener {
+            if (filterMavenCheckBox.isSelected) {
+                filterLocalCheckBox.isSelected = false
+                filterStatus = ModuleStatus.MAVEN
+            } else {
+                filterStatus = null
+            }
+            applyFilter()
+        }
+        val filterPanel = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(4), 0)).apply {
+            isOpaque = false
+            add(filterLocalCheckBox)
+            add(filterMavenCheckBox)
+        }
         val bottomPanel = JPanel(BorderLayout()).apply {
             border = JBUI.Borders.empty(4, 8)
         }
+        bottomPanel.add(filterPanel, BorderLayout.WEST)
         bottomPanel.add(statusLabel, BorderLayout.EAST)
 
         add(topPanel, BorderLayout.NORTH)
@@ -256,10 +285,10 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun applyFilter() {
         val query = searchField.text.trim().lowercase()
-        displayedModules = if (query.isEmpty()) {
-            service.modules
-        } else {
-            service.modules.filter { it.name.lowercase().contains(query) }
+        val statusFilter = filterStatus
+        displayedModules = service.modules.filter { module ->
+            (query.isEmpty() || module.name.lowercase().contains(query)) &&
+            (statusFilter == null || module.status == statusFilter)
         }
         tableModel.setData(displayedModules)
         updateStatusLabel()
@@ -328,10 +357,9 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         val localCount = all.count { it.status == ModuleStatus.LOCAL }
         val mavenCount = all.count { it.status == ModuleStatus.MAVEN }
         val missingCount = all.count { it.status == ModuleStatus.MISSING }
-        statusLabel.text = buildString {
-            append("LOCAL: $localCount / MAVEN: $mavenCount")
-            if (missingCount > 0) append(" / 未下载: $missingCount")
-        }
+        filterLocalCheckBox.text = "LOCAL ($localCount)"
+        filterMavenCheckBox.text = "MAVEN ($mavenCount)"
+        statusLabel.text = if (missingCount > 0) "未下载: $missingCount" else ""
         if (service.hasUnsavedChanges) {
             syncBtn.text = "⚠ Sync Gradle"
             syncBtn.foreground = java.awt.Color(0xE65100)
