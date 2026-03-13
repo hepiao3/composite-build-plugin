@@ -88,14 +88,18 @@ object Json5ConfigManager {
                 return@let
             }
 
-            if (currentName == null) continue
+            // 检测 repositories 块结束（currentName == null 时遇到 } 说明是外层块关闭）
+            if (currentName == null) {
+                if (BLOCK_END_RE.matches(line)) inRepositories = false
+                continue
+            }
 
             // 解析字段
             URL_RE.find(line)?.let { currentUrl = it.groupValues[1] }
             BRANCH_RE.find(line)?.let { currentBranch = it.groupValues[1] }
             INCLUDE_BUILD_RE.find(line)?.let { currentIncludeBuild = it.groupValues[1] == "true" }
 
-            // 检测块结束
+            // 检测模块块结束
             if (BLOCK_END_RE.matches(line)) {
                 @Suppress("SENSELESS_COMPARISON")
                 val name = currentName!! // currentName 已在前面检查非空
