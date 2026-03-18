@@ -206,6 +206,8 @@ class CbmProjectService(private val project: Project) {
         ApplicationManager.getApplication().executeOnPooledThread {
             // 1. 从状态文件加载启用状态
             _enabledModules = loadEnabledModulesFromStateFile().toMutableSet()
+            // 状态文件即为上次 Sync 后的结果，初始快照与之保持一致，避免重启后按钮误报红
+            _syncedEnabledModules = _enabledModules.toSet()
 
             // 2. 加载 JSON5 配置
             val loaded = if (configFile.exists()) {
