@@ -2,7 +2,7 @@ import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 
 plugins {
     id("java")
-    id("org.jetbrains.kotlin.jvm") version "2.1.0"
+    id("org.jetbrains.kotlin.jvm") version "2.3.0"
     id("org.jetbrains.intellij.platform") version "2.2.1"
 }
 
@@ -22,13 +22,13 @@ repositories {
 
 dependencies {
     intellijPlatform {
-        val platformType = providers.gradleProperty("platformType")
-        val platformVersion = providers.gradleProperty("platformVersion")
-        create(platformType, platformVersion)
+        // 基于本地 Android Studio 编译，以获取 org.jetbrains.android 等 AS 专属 API
+        local("/Applications/Android Studio Preview.app/Contents")
 
-        // Required bundled plugins for Gradle integration
+        // Required bundled plugins
         bundledPlugin("com.intellij.gradle")
         bundledPlugin("org.jetbrains.plugins.gradle")
+        bundledPlugin("org.jetbrains.android")
 
         pluginVerifier()
         zipSigner()
@@ -84,6 +84,10 @@ tasks {
         enabled = false
     }
     instrumentTestCode {
+        enabled = false
+    }
+    // 使用本地 Android Studio 作为平台时，沙箱环境不兼容，禁用此任务
+    buildSearchableOptions {
         enabled = false
     }
 }
