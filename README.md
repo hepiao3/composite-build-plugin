@@ -7,7 +7,7 @@
 | 功能 | 描述 |
 |------|------|
 | 可视化模块状态 | 展示所有子模块的 LOCAL / MAVEN / MISSING 状态 |
-| 一键切换 | 勾选/取消勾选即可切换 includeBuild，自动写回 JSON5 并重新生成配置 |
+| 一键切换 | 勾选/取消勾选即可切换 includeBuild，自动写入状态文件并在下次 Gradle 构建时生效 |
 | 批量操作 | 一键将全部模块切换为 LOCAL 或 MAVEN |
 | 下载缺失模块 | 点击「↓ 下载」按钮自动克隆缺失的子模块 |
 | Gradle Sync | 配置变更后一键触发 Gradle 同步，有未同步改动时按钮高亮提醒 |
@@ -42,9 +42,9 @@ cd composite-build-plugin/
 
 | 文件 | 角色 |
 |------|------|
-| `scripts/module_manager/project-repos.json5` | 读写：模块配置中心 |
-| `include_build.gradle` | 写入：自动生成的复合构建配置 |
-| `scripts/module_manager/download-projects.js` | 委托执行：模块下载 |
+| `scripts/module_manager/project-repos.json5` | 只读：模块配置中心（模块名、仓库地址、branch） |
+| `~/.gradle/init.d/cbm.gradle` | 插件自动部署的 Gradle init script，负责读取状态文件并动态注入 includeBuild 配置 |
+| `~/.gradle/cbm/<hash>.json` | 插件写入的状态文件，记录当前哪些模块启用了复合构建，由 init script 在构建时读取 |
 
 ## 兼容性
 
