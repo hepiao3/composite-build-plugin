@@ -2,8 +2,6 @@
 
 管理 Android 多模块复合构建（Composite Build）配置的 Android Studio 插件。
 
-<img src="screenshots/preview.png" width="48%"/> <img src="screenshots/search.png" width="48%"/>
-
 ## 功能
 
 | 功能 | 描述 |
@@ -52,3 +50,14 @@ cd composite-build-plugin/
 
 - Android Studio Hedgehog (2023.3.1) 及以上
 - IntelliJ IDEA 2023.3+
+
+## 历史版本
+
+| 版本 | 新增功能 | Bug 修复 |
+|------|---------|---------|
+| 1.0.5 | 支持 flavor dependencySubstitution 自动生成<br>表头添加全选复选框<br>底部增加 LOCAL / MAVEN 互斥筛选复选框，整合状态统计显示<br>优化分支弹窗交互 | 修复重启后 Sync Gradle 按钮误报红<br>修复 cbm.init.gradle 中多 flavorAware 组件的依赖替换问题<br>修复多 flavorAware 组件同时启用时 dependencySubstitution 互相干扰<br>修复 repositories 块结束后 config/usage 被误解析为模块<br>修复 Refresh 按钮未重新加载 project-repos.json5 |
+| 1.0.4 | 允许 MAVEN 状态的模块切换分支<br>下载模块时在复选框位置显示 loading 动画 | 修复删除本地目录后 Sync 时状态仍显示 LOCAL<br>修复分支列表只显示一个分支 |
+| 1.0.3 | 显示本地 Git 实际分支<br>支持分支切换（含未提交修改检查）<br>分支列宽自适应、异步缓存<br>Sync 按钮有改动时高亮提醒 | 修复废弃 API 及编译警告<br>修复分支列最小宽度过小<br>工具窗口默认宽度改为 300 |
+| 1.0.2 | 为插件添加工具窗口图标<br>面板显示时自动刷新勾选状态<br>配置变更后显示待 Sync 提醒 | 修复取消勾选后待 Sync 提示不消失<br>修复工具窗口收起展开时无法刷新勾选状态<br>移除插件版本上限限制以兼容更高版本 IDE |
+| 1.0.1 | 改为手动触发 Gradle Sync | 修复状态列图标溢出到复选框列 |
+| 1.0.0 | 初始版本：可视化模块 LOCAL / MAVEN / MISSING 状态<br>支持勾选切换 includeBuild 并自动写回配置<br>一键触发 Gradle Sync<br>支持下载缺失模块 | — |
