@@ -5,18 +5,20 @@ import java.io.File
 /**
  * 表示 project-repos.json5 中单个子模块的配置。
  *
- * @param name          模块名称（如 "jm_common"），对应 JSON5 的键名
- * @param url           Git 仓库地址
- * @param branch        目标分支
- * @param includeBuild  是否启用复合构建（对应 JSON5 中的 includeBuild 字段）
- * @param localDirExists 运行时检测：本地目录（../name_project）是否存在
+ * @param name             模块名称（如 "jm_common"），对应 JSON5 的键名
+ * @param url              Git 仓库地址
+ * @param branch           目标分支
+ * @param includeBuild     是否启用复合构建（对应 JSON5 中的 includeBuild 字段）
+ * @param localDirExists   运行时检测：本地目录（../name_project）是否存在
+ * @param flavorSubstitution 是否需要生成 dependencySubstitution 块（对应 JSON5 的 flavor 字段）
  */
 data class ModuleConfig(
     val name: String,
     val url: String,
     val branch: String,
     var includeBuild: Boolean,
-    val localDirExists: Boolean
+    val localDirExists: Boolean,
+    val flavorSubstitution: Boolean = false
 ) {
     /** 模块本地目录名：约定为 moduleName_project，位于主工程父目录 */
     val localDirName: String get() = "${name}_project"

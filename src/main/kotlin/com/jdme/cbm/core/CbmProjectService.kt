@@ -1,5 +1,7 @@
 package com.jdme.cbm.core
 
+import com.android.tools.idea.gradle.project.sync.GradleSyncListenerWithRoot
+import com.android.tools.idea.gradle.project.sync.GradleSyncState
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.logger
@@ -73,7 +75,7 @@ class CbmProjectService(private val project: Project) {
 
     /**
      * 从 .cbm-include-build.json 加载启用状态。
-     * 文件格式：{ "enabledModules": ["jm_common", "jm_login"] }
+     * 支持新格式（modules 数组）和旧格式（enabledModules 数组）兼容读取。
      */
     private fun loadEnabledModulesFromStateFile(): Set<String> {
         val file = stateFile
@@ -84,22 +86,28 @@ class CbmProjectService(private val project: Project) {
 
         return try {
             val content = file.readText()
-            // 简单解析 JSON：提取 enabledModules 数组（使用贪婪匹配支持多行）
-            val regex = Regex("""\"enabledModules\"\s*:\s*\[([\s\S]*?)\]""")
-            val match = regex.find(content)
 
-            if (match != null) {
-                val arrayContent = match.groupValues[1]
-                if (arrayContent.isBlank()) {
-                    emptySet()
-                } else {
-                    // 提取引号内的模块名
-                    val moduleRegex = Regex("\"([^\"]+)\"")
-                    moduleRegex.findAll(arrayContent).map { it.groupValues[1] }.toSet()
-                }
-            } else {
-                emptySet()
+            // 新格式：从 modules 数组中提取 name 字段
+            val modulesArrayRe = Regex(""""modules"\s*:\s*\[([\s\S]*?)\]""")
+            val modulesMatch = modulesArrayRe.find(content)
+            if (modulesMatch != null) {
+                val nameRe = Regex(""""name"\s*:\s*"([^"]+)"""")
+                return nameRe.findAll(modulesMatch.groupValues[1])
+                    .map { it.groupValues[1] }
+                    .toSet()
             }
+
+            // 旧格式兼容：enabledModules 数组
+            val legacyRe = Regex(""""enabledModules"\s*:\s*\[([\s\S]*?)\]""")
+            val legacyMatch = legacyRe.find(content)
+            if (legacyMatch != null) {
+                val arrayContent = legacyMatch.groupValues[1]
+                if (arrayContent.isBlank()) return emptySet()
+                val moduleRe = Regex("\"([^\"]+)\"")
+                return moduleRe.findAll(arrayContent).map { it.groupValues[1] }.toSet()
+            }
+
+            emptySet()
         } catch (e: Exception) {
             LOG.error("Failed to parse state file", e)
             emptySet()
@@ -107,25 +115,49 @@ class CbmProjectService(private val project: Project) {
     }
 
     /**
-     * 将启用状态保存到 .cbm-include-build.json。
+     * 将启用状态保存到 .cbm-include-build.json（新格式）。
+     *
+     * 新格式：
+     * {
+     *   "groupId": "com.example",
+     *   "productFlavors": ["me", "global"],
+     *   "modules": [
+     *     { "name": "jm_common", "path": "../jm_common_project" },
+     *     { "name": "jm_web_impl", "path": "../jm_web_impl_project", "flavor": true }
+     *   ],
+     *   "updatedAt": "..."
+     * }
      */
     private fun saveEnabledModulesToStateFile() {
         val file = stateFile
         LOG.info("Attempting to save state file to: ${file.absolutePath}")
         try {
+            val groupId = ProjectInfoReader.readGroupId(projectRoot) ?: ""
+            val activeFlavor = BuildVariantReader.getActiveFlavor(project)
+
+            val enabledList = _modules.filter { _enabledModules.contains(it.name) }
+
             val sb = StringBuilder()
             sb.appendLine("{")
-            sb.appendLine("  \"enabledModules\": [")
-            val modules = _enabledModules.sorted()
-            modules.forEachIndexed { index, module ->
-                val comma = if (index < modules.size - 1) "," else ""
-                sb.appendLine("    \"$module\"$comma")
+            sb.appendLine("  \"groupId\": \"$groupId\",")
+            sb.appendLine("  \"activeFlavor\": \"${activeFlavor ?: ""}\",")
+
+            // modules 数组
+            sb.appendLine("  \"modules\": [")
+            enabledList.forEachIndexed { index, module ->
+                val comma = if (index < enabledList.size - 1) "," else ""
+                if (module.flavorSubstitution) {
+                    sb.appendLine("    { \"name\": \"${module.name}\", \"flavor\": true }$comma")
+                } else {
+                    sb.appendLine("    { \"name\": \"${module.name}\" }$comma")
+                }
             }
             sb.appendLine("  ],")
             sb.appendLine("  \"updatedAt\": \"${java.time.LocalDateTime.now()}\"")
             sb.appendLine("}")
+
             file.writeText(sb.toString())
-            LOG.info("Saved ${_enabledModules.size} enabled modules to state file")
+            LOG.info("Saved ${enabledList.size} modules to state file (groupId=$groupId, activeFlavor=$activeFlavor)")
         } catch (e: Exception) {
             LOG.error("Failed to save state file", e)
             throw e

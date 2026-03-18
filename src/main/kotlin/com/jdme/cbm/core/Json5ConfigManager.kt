@@ -39,6 +39,8 @@ object Json5ConfigManager {
     private val BRANCH_RE = Regex("""^\s*"branch"\s*:\s*"([^"]+)"""")
     // 匹配 includeBuild 字段
     private val INCLUDE_BUILD_RE = Regex("""^\s*"includeBuild"\s*:\s*(true|false)""")
+    // 匹配 flavor 字段
+    private val FLAVOR_RE = Regex("""^\s*"flavor"\s*:\s*(true|false)""")
     // 匹配块结束行（考虑 trailing comma）
     private val BLOCK_END_RE = Regex("""^\s*},?\s*(//.+)?$""")
     // 匹配 "repositories": { 行
@@ -65,6 +67,7 @@ object Json5ConfigManager {
         var currentUrl = ""
         var currentBranch = ""
         var currentIncludeBuild = false
+        var currentFlavor = false
 
         for (line in lines) {
             // 跳过注释行
@@ -85,6 +88,7 @@ object Json5ConfigManager {
                 currentUrl = ""
                 currentBranch = ""
                 currentIncludeBuild = false
+                currentFlavor = false
                 return@let
             }
 
@@ -98,6 +102,7 @@ object Json5ConfigManager {
             URL_RE.find(line)?.let { currentUrl = it.groupValues[1] }
             BRANCH_RE.find(line)?.let { currentBranch = it.groupValues[1] }
             INCLUDE_BUILD_RE.find(line)?.let { currentIncludeBuild = it.groupValues[1] == "true" }
+            FLAVOR_RE.find(line)?.let { currentFlavor = it.groupValues[1] == "true" }
 
             // 检测模块块结束
             if (BLOCK_END_RE.matches(line)) {
@@ -109,7 +114,8 @@ object Json5ConfigManager {
                     url = currentUrl,
                     branch = currentBranch,
                     includeBuild = currentIncludeBuild,
-                    localDirExists = localExists
+                    localDirExists = localExists,
+                    flavorSubstitution = currentFlavor
                 )
                 currentName = null
             }
