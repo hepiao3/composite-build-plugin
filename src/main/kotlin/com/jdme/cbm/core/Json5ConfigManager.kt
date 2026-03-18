@@ -39,8 +39,8 @@ object Json5ConfigManager {
     private val BRANCH_RE = Regex("""^\s*"branch"\s*:\s*"([^"]+)"""")
     // 匹配 includeBuild 字段
     private val INCLUDE_BUILD_RE = Regex("""^\s*"includeBuild"\s*:\s*(true|false)""")
-    // 匹配 flavor 字段
-    private val FLAVOR_RE = Regex("""^\s*"flavor"\s*:\s*(true|false)""")
+    // 匹配 flavorAware 字段
+    private val FLAVOR_RE = Regex("""^\s*"flavorAware"\s*:\s*(true|false)""")
     // 匹配块结束行（考虑 trailing comma）
     private val BLOCK_END_RE = Regex("""^\s*},?\s*(//.+)?$""")
     // 匹配 "repositories": { 行
@@ -115,7 +115,7 @@ object Json5ConfigManager {
                     branch = currentBranch,
                     includeBuild = currentIncludeBuild,
                     localDirExists = localExists,
-                    flavorSubstitution = currentFlavor
+                    flavorAware = currentFlavor
                 )
                 currentName = null
             }

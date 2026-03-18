@@ -16,17 +16,37 @@ import java.io.File
  *
  * 存储结构：
  * - project-repos.json5：仅作为组件配置表（模块名、URL、branch）
- * - .cbm-include-build.json：插件内部存储的复合构建启用状态（供 settings.gradle 读取）
+ * - ~/.gradle/cbm/<hash>.json：插件状态文件，供 Gradle init script 读取
+ * - ~/.gradle/init.d/cbm.gradle：Gradle init script，由插件自动部署和维护
  *
  * 工作原理：
- * - 加载时：解析 project-repos.json5 获取模块列表，从 .cbm-include-build.json 获取启用状态
- * - 切换时：只更新 .cbm-include-build.json，不再修改 project-repos.json5
- * - settings.gradle：读取 .cbm-include-build.json 动态生成 includeBuild 配置
+ * - 加载时：解析 project-repos.json5 获取模块列表，从状态文件获取启用状态
+ * - 切换时：只更新状态文件
+ * - Gradle 构建时：init script 读取状态文件，动态生成 includeBuild 配置
  */
 @Service(Service.Level.PROJECT)
 class CbmProjectService(private val project: Project) {
 
     private val LOG = logger<CbmProjectService>()
+
+    init {
+        ApplicationManager.getApplication().executeOnPooledThread {
+            CbmInitScriptManager.deployInitScript()
+            CbmInitScriptManager.migrateOldStateFile(projectRoot)
+        }
+        GradleSyncState.subscribe(project, object : GradleSyncListenerWithRoot {
+            override fun syncStarted(project: Project, rootProjectPath: String) {
+                // 在 Gradle 进程启动前同步写入最新 flavor，确保 init script 读到正确值
+                if (_enabledModules.isEmpty()) return
+                try {
+                    saveEnabledModulesToStateFile()
+                    LOG.info("State file updated before Gradle sync started")
+                } catch (e: Exception) {
+                    LOG.error("Failed to update state file before sync", e)
+                }
+            }
+        }, project)
+    }
 
     private val projectRoot: File get() {
         val path = project.basePath
@@ -43,11 +63,8 @@ class CbmProjectService(private val project: Project) {
                    else File(projectRoot, "scripts/module_manager/project-repos.json5")
         }
 
-    /**
-     * 插件状态文件，供 settings.gradle 读取以动态生成 includeBuild 配置。
-     * 文件格式：{ "enabledModules": ["jm_common", "jm_login", ...] }
-     */
-    val stateFile: File get() = File(projectRoot, ".cbm-include-build.json")
+    /** 当前工程的状态文件，位于 ~/.gradle/cbm/<hash>.json */
+    val stateFile: File get() = CbmInitScriptManager.stateFileFor(projectRoot)
 
     private var _modules: MutableList<ModuleConfig> = mutableListOf()
     val modules: List<ModuleConfig> get() = _modules.toList()
@@ -123,7 +140,7 @@ class CbmProjectService(private val project: Project) {
      *   "productFlavors": ["me", "global"],
      *   "modules": [
      *     { "name": "jm_common", "path": "../jm_common_project" },
-     *     { "name": "jm_web_impl", "path": "../jm_web_impl_project", "flavor": true }
+     *     { "name": "jm_web_impl", "path": "../jm_web_impl_project", "flavorAware": true }
      *   ],
      *   "updatedAt": "..."
      * }
@@ -134,6 +151,11 @@ class CbmProjectService(private val project: Project) {
         try {
             val groupId = ProjectInfoReader.readGroupId(projectRoot) ?: ""
             val activeFlavor = BuildVariantReader.getActiveFlavor(project)
+
+            // 每次保存前从 JSON5 重新读取 flavorAware，避免用户修改配置后内存未刷新
+            val latestFlavorMap = if (configFile.exists()) {
+                Json5ConfigManager.load(configFile, projectRoot).associate { it.name to it.flavorAware }
+            } else emptyMap()
 
             val enabledList = _modules.filter { _enabledModules.contains(it.name) }
 
@@ -146,8 +168,9 @@ class CbmProjectService(private val project: Project) {
             sb.appendLine("  \"modules\": [")
             enabledList.forEachIndexed { index, module ->
                 val comma = if (index < enabledList.size - 1) "," else ""
-                if (module.flavorSubstitution) {
-                    sb.appendLine("    { \"name\": \"${module.name}\", \"flavor\": true }$comma")
+                val flavorAware = latestFlavorMap[module.name] ?: module.flavorAware
+                if (flavorAware) {
+                    sb.appendLine("    { \"name\": \"${module.name}\", \"flavorAware\": true }$comma")
                 } else {
                     sb.appendLine("    { \"name\": \"${module.name}\" }$comma")
                 }

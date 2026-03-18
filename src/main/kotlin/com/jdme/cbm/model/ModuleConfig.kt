@@ -10,7 +10,7 @@ import java.io.File
  * @param branch           目标分支
  * @param includeBuild     是否启用复合构建（对应 JSON5 中的 includeBuild 字段）
  * @param localDirExists   运行时检测：本地目录（../name_project）是否存在
- * @param flavorSubstitution 是否需要生成 dependencySubstitution 块（对应 JSON5 的 flavor 字段）
+ * @param flavorAware        是否需要跟随主工程变种做 dependencySubstitution（对应 JSON5 的 flavorAware 字段）
  */
 data class ModuleConfig(
     val name: String,
@@ -18,7 +18,7 @@ data class ModuleConfig(
     val branch: String,
     var includeBuild: Boolean,
     val localDirExists: Boolean,
-    val flavorSubstitution: Boolean = false
+    val flavorAware: Boolean = false
 ) {
     /** 模块本地目录名：约定为 moduleName_project，位于主工程父目录 */
     val localDirName: String get() = "${name}_project"
