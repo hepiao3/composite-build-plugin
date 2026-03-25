@@ -13,7 +13,6 @@ import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.table.JBTable
 import com.intellij.util.ui.JBUI
-import com.jdme.cbm.core.CbmBranchStore
 import com.jdme.cbm.core.CbmProjectService
 import com.jdme.cbm.core.GradleSyncTrigger
 import com.jdme.cbm.core.ModuleDownloader
@@ -66,7 +65,6 @@ import javax.swing.table.DefaultTableCellRenderer
 class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private val service = CbmProjectService.getInstance(project)
-    private val branchStore = CbmBranchStore.getInstance(project)
     private val tableModel = ModuleTableModel()
     private val table = JBTable(tableModel)
     private val searchField = SearchTextField()
@@ -453,7 +451,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun showBranchPopup(row: Int, module: ModuleConfig) {
         val projectRoot = java.io.File(project.basePath ?: "")
         val allBranches = module.getAllBranches(projectRoot)
-        val currentBranch = module.getLocalGitBranch(projectRoot) ?: branchStore.getBranch(module.name)
+        val currentBranch = module.getLocalGitBranch(projectRoot)
 
         // 当前分支置顶（currentBranch 为 null 时直接显示全部分支），其余按原顺序
         val sortedBranches = if (currentBranch != null) {
@@ -548,7 +546,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
 
         val tableScreenLoc = table.locationOnScreen
         // 右对齐：弹窗右边缘与箭头图标右边缘对齐
-        val branchText = branchCache[module.name] ?: branchStore.getBranch(module.name) ?: ""
+        val branchText = branchCache[module.name] ?: ""
         val fm = table.getFontMetrics(table.font)
         val textWidth = fm.stringWidth(branchText)
         val arrowIcon = AllIcons.General.ArrowDown
@@ -590,9 +588,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
 
         val error = module.checkoutBranch(projectRoot, branchName)
         if (error == null) {
-            // 直接更新缓存，无需重跑 git；同时持久化保存到 branchStore
             branchCache[module.name] = branchName
-            branchStore.setBranch(module.name, branchName)
             val rowCount = tableModel.rowCount
             if (rowCount > 0) tableModel.fireTableRowsUpdated(0, rowCount - 1)
         } else {
@@ -642,7 +638,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
                 COL_CHECKED -> m.includeBuild
                 COL_NAME -> m.name
                 COL_STATUS -> m.status
-                COL_BRANCH -> branchCache[m.name] ?: branchStore.getBranch(m.name)
+                COL_BRANCH -> branchCache[m.name]
                 COL_ACTION -> if (m.status == ModuleStatus.MISSING) "↓ 下载" else ""
                 else -> ""
             }

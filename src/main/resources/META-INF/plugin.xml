@@ -44,11 +44,6 @@
         <projectService
             serviceImplementation="com.jdme.cbm.core.CbmProjectService"
         />
-
-        <!-- 项目级服务：持久化用户选择的分支信息 -->
-        <projectService
-            serviceImplementation="com.jdme.cbm.core.CbmBranchStore"
-        />
     </extensions>
 
     <actions>
