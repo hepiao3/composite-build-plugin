@@ -19,8 +19,7 @@ import java.io.File
  *   "repositories": {
  *     "moduleName": {
  *       "url": "...",
- *       "includeBuild": false,
- *       "branch": "..."
+ *       "includeBuild": false
  *     }, // comment
  *     ...
  *   }
@@ -35,8 +34,6 @@ object Json5ConfigManager {
     private val MODULE_KEY_RE = Regex("""^\s*"(\w+)"\s*:\s*\{""")
     // 匹配 url 字段
     private val URL_RE = Regex("""^\s*"url"\s*:\s*"([^"]+)"""")
-    // 匹配 branch 字段
-    private val BRANCH_RE = Regex("""^\s*"branch"\s*:\s*"([^"]+)"""")
     // 匹配 includeBuild 字段
     private val INCLUDE_BUILD_RE = Regex("""^\s*"includeBuild"\s*:\s*(true|false)""")
     // 匹配 flavorAware 字段
@@ -65,7 +62,6 @@ object Json5ConfigManager {
         var inRepositories = false
         var currentName: String? = null
         var currentUrl = ""
-        var currentBranch = ""
         var currentIncludeBuild = false
         var currentFlavor = false
 
@@ -86,7 +82,6 @@ object Json5ConfigManager {
             MODULE_KEY_RE.find(line)?.let { match ->
                 currentName = match.groupValues[1]
                 currentUrl = ""
-                currentBranch = ""
                 currentIncludeBuild = false
                 currentFlavor = false
                 return@let
@@ -100,7 +95,6 @@ object Json5ConfigManager {
 
             // 解析字段
             URL_RE.find(line)?.let { currentUrl = it.groupValues[1] }
-            BRANCH_RE.find(line)?.let { currentBranch = it.groupValues[1] }
             INCLUDE_BUILD_RE.find(line)?.let { currentIncludeBuild = it.groupValues[1] == "true" }
             FLAVOR_RE.find(line)?.let { currentFlavor = it.groupValues[1] == "true" }
 
@@ -112,7 +106,6 @@ object Json5ConfigManager {
                 modules += ModuleConfig(
                     name = name,
                     url = currentUrl,
-                    branch = currentBranch,
                     includeBuild = currentIncludeBuild,
                     localDirExists = localExists,
                     flavorAware = currentFlavor

@@ -59,7 +59,6 @@ object IncludeBuildWriter {
                 } catch (e: Exception) {
                     localDir.absolutePath
                 }
-                sb.appendLine("// ${module.name} - branch: ${module.branch}")
                 sb.appendLine("includeBuild('$relativePath')")
                 sb.appendLine()
             }

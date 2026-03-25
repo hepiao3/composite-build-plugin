@@ -7,7 +7,6 @@ import java.io.File
  *
  * @param name             模块名称（如 "jm_common"），对应 JSON5 的键名
  * @param url              Git 仓库地址
- * @param branch           目标分支
  * @param includeBuild     是否启用复合构建（对应 JSON5 中的 includeBuild 字段）
  * @param localDirExists   运行时检测：本地目录（../name_project）是否存在
  * @param flavorAware        是否需要跟随主工程变种做 dependencySubstitution（对应 JSON5 的 flavorAware 字段）
@@ -15,7 +14,6 @@ import java.io.File
 data class ModuleConfig(
     val name: String,
     val url: String,
-    val branch: String,
     var includeBuild: Boolean,
     val localDirExists: Boolean,
     val flavorAware: Boolean = false

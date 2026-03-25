@@ -61,20 +61,10 @@ object ModuleDownloader {
 
         log(console, "📥 开始下载模块: ${module.name}")
         log(console, "   目标目录: ${targetDir.absolutePath}")
-        log(console, "   目标分支: ${module.branch}")
 
-        val cloneSuccess = runProcess(
+        return runProcess(
             cmd = listOf("git", "clone", module.url, targetDir.absolutePath),
             workDir = parentDir,
-            console = console
-        )
-        if (!cloneSuccess) return false
-
-        // clone 默认分支后，切换到配置的目标分支
-        log(console, "🔀 切换到目标分支: ${module.branch}")
-        return runProcess(
-            cmd = listOf("git", "checkout", module.branch),
-            workDir = targetDir,
             console = console
         )
     }
