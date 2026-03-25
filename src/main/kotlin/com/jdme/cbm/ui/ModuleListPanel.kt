@@ -13,6 +13,7 @@ import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.table.JBTable
 import com.intellij.util.ui.JBUI
+import com.jdme.cbm.core.CbmBranchStore
 import com.jdme.cbm.core.CbmProjectService
 import com.jdme.cbm.core.GradleSyncTrigger
 import com.jdme.cbm.core.ModuleDownloader
@@ -65,6 +66,7 @@ import javax.swing.table.DefaultTableCellRenderer
 class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private val service = CbmProjectService.getInstance(project)
+    private val branchStore = CbmBranchStore.getInstance(project)
     private val tableModel = ModuleTableModel()
     private val table = JBTable(tableModel)
     private val searchField = SearchTextField()
@@ -330,8 +332,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun loadBranchesAsync() {
         if (!branchLoadInProgress.compareAndSet(false, true)) return
         val projectRoot = java.io.File(project.basePath ?: "")
-        // 加载本地目录存在的模块（LOCAL 或 MAVEN+本地存在均需加载分支）
-        val localModules = service.modules.filter { it.localDirExists }
+        val localModules = service.modules.filter { it.status == ModuleStatus.LOCAL }
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
                 for (module in localModules) {
@@ -376,11 +377,10 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         if (value && !module.localDirExists) {
             val choice = Messages.showYesNoDialog(
                 project,
-                "模块 ${module.name} 的本地目录不存在（${module.localDirName}）。\n" +
-                "切换为 LOCAL 模式前需要先下载模块。\n\n" +
-                "是否现在下载并切换？",
+                "模块 ${module.name} 的本地目录不存在（${module.localDirName}）。\n\n" +
+                "是否现在下载？",
                 "模块未下载",
-                "下载并切换",
+                "下载",
                 "取消",
                 Messages.getWarningIcon()
             )
@@ -412,11 +412,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             downloadingModules.remove(module.name)
             if (success) {
                 // 重新加载以更新 localDirExists 状态
-                service.loadModules {
-                    if (!module.includeBuild) {
-                        service.setIncludeBuild(module.name, true)
-                    }
-                }
+                service.loadModules()
             }
         }
     }
@@ -455,10 +451,14 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun showBranchPopup(row: Int, module: ModuleConfig) {
         val projectRoot = java.io.File(project.basePath ?: "")
         val allBranches = module.getAllBranches(projectRoot)
-        val currentBranch = module.getLocalGitBranch(projectRoot) ?: module.branch
+        val currentBranch = module.getLocalGitBranch(projectRoot) ?: branchStore.getBranch(module.name)
 
-        // 当前分支置顶，其余按原顺序
-        val sortedBranches = listOf(currentBranch) + allBranches.filter { it != currentBranch }
+        // 当前分支置顶（currentBranch 为 null 时直接显示全部分支），其余按原顺序
+        val sortedBranches = if (currentBranch != null) {
+            listOf(currentBranch) + allBranches.filter { it != currentBranch }
+        } else {
+            allBranches
+        }
 
         val listModel = javax.swing.DefaultListModel<String>()
         sortedBranches.forEach { listModel.addElement(it) }
@@ -546,7 +546,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
 
         val tableScreenLoc = table.locationOnScreen
         // 右对齐：弹窗右边缘与箭头图标右边缘对齐
-        val branchText = branchCache[module.name] ?: module.branch
+        val branchText = branchCache[module.name] ?: branchStore.getBranch(module.name) ?: ""
         val fm = table.getFontMetrics(table.font)
         val textWidth = fm.stringWidth(branchText)
         val arrowIcon = AllIcons.General.ArrowDown
@@ -588,8 +588,9 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
 
         val error = module.checkoutBranch(projectRoot, branchName)
         if (error == null) {
-            // 直接更新缓存，无需重跑 git
+            // 直接更新缓存，无需重跑 git；同时持久化保存到 branchStore
             branchCache[module.name] = branchName
+            branchStore.setBranch(module.name, branchName)
             val rowCount = tableModel.rowCount
             if (rowCount > 0) tableModel.fireTableRowsUpdated(0, rowCount - 1)
         } else {
@@ -633,13 +634,13 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         override fun getRowCount() = data.size
         override fun getColumnCount() = 5
 
-        override fun getValueAt(row: Int, col: Int): Any {
+        override fun getValueAt(row: Int, col: Int): Any? {
             val m = data[row]
             return when (col) {
                 COL_CHECKED -> m.includeBuild
                 COL_NAME -> m.name
                 COL_STATUS -> m.status
-                COL_BRANCH -> branchCache[m.name] ?: m.branch
+                COL_BRANCH -> branchCache[m.name] ?: branchStore.getBranch(m.name)
                 COL_ACTION -> if (m.status == ModuleStatus.MISSING) "↓ 下载" else ""
                 else -> ""
             }
@@ -767,18 +768,27 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
     /** 分支列的 Renderer：显示分支名和下拉箭头，LOCAL 状态时鼠标变为手型 */
     private inner class BranchRenderer : DefaultTableCellRenderer() {
         private var currentRow: Int = -1
+        private var showArrow: Boolean = false
 
         override fun getTableCellRendererComponent(
             table: JTable, value: Any?, isSelected: Boolean,
             hasFocus: Boolean, row: Int, col: Int
         ): java.awt.Component {
             currentRow = row
-            val comp = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, col)
-            text = value as? String ?: ""
             val module = displayedModules.getOrNull(row)
             val isLocal = module?.localDirExists == true
+            val branchName = value as? String
 
-            // LOCAL 状态时显示可点击的样式，并为箭头预留右侧空间
+            val comp = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, col)
+
+            text = branchName ?: if (!isLocal) "暂无" else ""
+            foreground = when {
+                isSelected -> table.selectionForeground
+                !isLocal && branchName == null -> java.awt.Color(0x888888)
+                else -> table.foreground
+            }
+            showArrow = isLocal && !branchName.isNullOrEmpty()
+
             cursor = if (isLocal) {
                 java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR)
             } else {
@@ -792,8 +802,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
 
         override fun paint(g: Graphics) {
             super.paint(g)
-            val module = displayedModules.getOrNull(currentRow) ?: return
-            if (!module.localDirExists) return
+            if (!showArrow) return
 
             val icon = AllIcons.General.ArrowDown
             val textWidth = g.fontMetrics.stringWidth(text)
