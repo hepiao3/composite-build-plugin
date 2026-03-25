@@ -783,7 +783,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
 
             val comp = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, col)
 
-            text = branchName ?: if (!isLocal) "暂无" else ""
+            text = branchName ?: if (!isLocal) "暂无（未下载）" else ""
             foreground = when {
                 isSelected -> table.selectionForeground
                 !isLocal && branchName == null -> java.awt.Color(0x888888)
