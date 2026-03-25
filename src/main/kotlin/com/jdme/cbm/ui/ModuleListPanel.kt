@@ -138,7 +138,9 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         val refreshBranchBtn = JButton("↺ Refresh").apply {
             toolTipText = "从 project-repos.json5 重新加载所有模块"
             addActionListener {
-                branchCache.clear()
+                // 只清除 LOCAL 状态模块的分支缓存，MAVEN 模块保持现有缓存
+                service.modules.filter { it.status == ModuleStatus.LOCAL }
+                    .forEach { branchCache.remove(it.name) }
                 service.loadModules()
             }
         }
@@ -332,7 +334,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun loadBranchesAsync() {
         if (!branchLoadInProgress.compareAndSet(false, true)) return
         val projectRoot = java.io.File(project.basePath ?: "")
-        val localModules = service.modules.filter { it.status == ModuleStatus.LOCAL }
+        val localModules = service.modules.filter { it.localDirExists }
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
                 for (module in localModules) {
