@@ -91,6 +91,16 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val branchCache = ConcurrentHashMap<String, String>()
     private val branchLoadInProgress = AtomicBoolean(false)
 
+    // 正在加载分支的模块名集合
+    private val branchLoadingModules: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+    // 驱动分支 loading 动画刷新的定时器（EDT 线程）
+    private val branchRepaintTimer = javax.swing.Timer(80) {
+        val rowCount = tableModel.rowCount
+        if (rowCount > 0) tableModel.fireTableRowsUpdated(0, rowCount - 1)
+        if (branchLoadingModules.isEmpty()) (it.source as? javax.swing.Timer)?.stop()
+    }
+
     // 正在下载的模块名集合
     private val downloadingModules: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
@@ -333,6 +343,14 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         if (!branchLoadInProgress.compareAndSet(false, true)) return
         val projectRoot = java.io.File(project.basePath ?: "")
         val localModules = service.modules.filter { it.localDirExists }
+
+        // 只对 LOCAL 状态模块标记 loading 动画
+        localModules.filter { it.status == ModuleStatus.LOCAL }
+            .forEach { branchLoadingModules.add(it.name) }
+        SwingUtilities.invokeLater {
+            if (!branchRepaintTimer.isRunning) branchRepaintTimer.start()
+        }
+
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
                 for (module in localModules) {
@@ -340,9 +358,11 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
                     if (branch != null) {
                         branchCache[module.name] = branch
                     }
+                    branchLoadingModules.remove(module.name)
                 }
             } finally {
                 branchLoadInProgress.set(false)
+                branchLoadingModules.clear()
             }
             SwingUtilities.invokeLater {
                 val rowCount = tableModel.rowCount
@@ -588,7 +608,9 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
 
         val error = module.checkoutBranch(projectRoot, branchName)
         if (error == null) {
-            branchCache[module.name] = branchName
+            // 远程分支切换后实际所在的是同名本地分支
+            val actualBranch = if (branchName.startsWith("origin/")) branchName.removePrefix("origin/") else branchName
+            branchCache[module.name] = actualBranch
             val rowCount = tableModel.rowCount
             if (rowCount > 0) tableModel.fireTableRowsUpdated(0, rowCount - 1)
         } else {
@@ -767,6 +789,11 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
     private inner class BranchRenderer : DefaultTableCellRenderer() {
         private var currentRow: Int = -1
         private var showArrow: Boolean = false
+        private val branchLoadingLabel = JLabel(AnimatedIcon.Default.INSTANCE).apply {
+            horizontalAlignment = SwingConstants.LEFT
+            border = BorderFactory.createEmptyBorder(0, 2, 0, 2)
+            isOpaque = true
+        }
 
         override fun getTableCellRendererComponent(
             table: JTable, value: Any?, isSelected: Boolean,
@@ -776,6 +803,12 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             val module = displayedModules.getOrNull(row)
             val isLocal = module?.localDirExists == true
             val branchName = value as? String
+
+            // 正在加载分支时显示 loading 动画
+            if (module != null && module.name in branchLoadingModules) {
+                branchLoadingLabel.background = if (isSelected) table.selectionBackground else table.background
+                return branchLoadingLabel
+            }
 
             val comp = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, col)
 

@@ -101,7 +101,8 @@ fun ModuleConfig.getAllBranches(projectRoot: File): List<String> {
             .start()
             .waitFor()
 
-        val allBranches = mutableSetOf<String>()
+        val localBranches = mutableListOf<String>()
+        val remoteBranches = mutableListOf<String>()
 
         // 获取本地分支
         val localProcess = ProcessBuilder("git", "branch")
@@ -116,7 +117,7 @@ fun ModuleConfig.getAllBranches(projectRoot: File): List<String> {
                 // 去掉 * 前缀（当前分支标记）和 HEAD -> remote/branch 引用
                 .map { if (it.startsWith("* ")) it.substring(2) else it }
                 .filter { !it.startsWith("HEAD ->") }
-                .forEach { allBranches.add(it) }
+                .forEach { localBranches.add(it) }
         }
 
         // 从本地远程跟踪分支读取（fetch 完成后已缓存，无需再次联网）
@@ -130,12 +131,11 @@ fun ModuleConfig.getAllBranches(projectRoot: File): List<String> {
             remoteOutput.lineSequence()
                 .map { it.trim() }
                 .filter { it.isNotBlank() && !it.contains("->") }
-                .map { it.substringAfter("/") }
-                .filter { it.isNotBlank() }
-                .forEach { allBranches.add(it) }
+                .forEach { remoteBranches.add(it) }
         }
 
-        return allBranches.distinct().sorted().toList()
+        // 本地分支排序在前，远程分支排序在后
+        return (localBranches.sorted() + remoteBranches.sorted()).distinct()
     } catch (e: Exception) {
         return emptyList()
     }
@@ -173,7 +173,14 @@ fun ModuleConfig.checkoutBranch(projectRoot: File, branchName: String): String? 
     if (!localDir.isDirectory) return "本地目录不存在"
 
     return try {
-        val process = ProcessBuilder("git", "checkout", branchName)
+        // 远程分支（origin/xxx）：先尝试切换到同名本地分支，不存在则创建并跟踪
+        val cmd = if (branchName.startsWith("origin/")) {
+            val localName = branchName.removePrefix("origin/")
+            listOf("git", "checkout", "-B", localName, "--track", branchName)
+        } else {
+            listOf("git", "checkout", branchName)
+        }
+        val process = ProcessBuilder(cmd)
             .directory(localDir)
             .redirectErrorStream(true)
             .start()
