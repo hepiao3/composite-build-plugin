@@ -132,6 +132,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         registerServiceListener()
         registerVisibilityListener()
         service.loadModules()
+        loadBranchesAsync()
     }
 
     /**
@@ -166,6 +167,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
                 service.modules.filter { it.status == ModuleStatus.LOCAL }
                     .forEach { branchCache.remove(it.name) }
                 service.loadModules()
+                loadBranchesAsync()
             }
         }
         syncBtn.addActionListener {
@@ -346,7 +348,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun registerServiceListener() {
-        service.addListener { refreshTable() }
+        service.addListener { applyFilterAndUpdateUI() }
     }
 
     private fun applyFilter() {
@@ -387,6 +389,11 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun refreshTable() {
         applyFilter()
         loadBranchesAsync()
+    }
+
+    /** 仅刷新表格显示（过滤+UI），不触发分支加载。供 service listener 使用。 */
+    private fun applyFilterAndUpdateUI() {
+        applyFilter()
     }
 
     /**
