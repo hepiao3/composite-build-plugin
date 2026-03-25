@@ -80,6 +80,22 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val filterMavenCheckBox = JCheckBox("MAVEN")
     private var filterStatus: ModuleStatus? = null
 
+    // 保存/恢复图标按钮
+    private val saveBtn = JButton(AllIcons.Actions.MenuSaveall).apply {
+        isEnabled = false
+        toolTipText = "保存当前 LOCAL 模块列表到当前分支快照"
+        preferredSize = java.awt.Dimension(JBUI.scale(24), JBUI.scale(24))
+        border = JBUI.Borders.empty(2)
+        isContentAreaFilled = false
+    }
+    private val restoreBtn = JButton(AllIcons.Actions.Rollback).apply {
+        isEnabled = false
+        toolTipText = "恢复当前分支已保存的 LOCAL 模块快照"
+        preferredSize = java.awt.Dimension(JBUI.scale(24), JBUI.scale(24))
+        border = JBUI.Borders.empty(2)
+        isContentAreaFilled = false
+    }
+
     // 表头全选复选框
     private val headerCheckBox = JCheckBox().apply {
         horizontalAlignment = SwingConstants.CENTER
@@ -275,16 +291,54 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             }
             applyFilter()
         }
+        saveBtn.addActionListener {
+            saveBtn.isEnabled = false
+            service.saveLocalSnapshot { success ->
+                if (success) {
+                    flashSuccessIcon(saveBtn, AllIcons.Actions.MenuSaveall)
+                } else {
+                    Messages.showMessageDialog(
+                        project,
+                        "保存失败：无法获取当前分支名，请确认工程目录是 git 仓库。",
+                        "保存失败",
+                        Messages.getErrorIcon()
+                    )
+                    updateSaveRestoreButtonStates()
+                }
+            }
+        }
+        restoreBtn.addActionListener {
+            restoreBtn.isEnabled = false
+            service.restoreLocalSnapshot { success ->
+                if (success) {
+                    flashSuccessIcon(restoreBtn, AllIcons.Actions.Rollback)
+                } else {
+                    Messages.showMessageDialog(
+                        project,
+                        "恢复失败：当前分支没有已保存的模块快照，或无法获取分支名。",
+                        "恢复失败",
+                        Messages.getErrorIcon()
+                    )
+                    updateSaveRestoreButtonStates()
+                }
+            }
+        }
         val filterPanel = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(4), 0)).apply {
             isOpaque = false
             add(filterLocalCheckBox)
             add(filterMavenCheckBox)
         }
+        val bottomEastPanel = JPanel(FlowLayout(FlowLayout.RIGHT, JBUI.scale(4), 0)).apply {
+            isOpaque = false
+            add(statusLabel)
+            add(saveBtn)
+            add(restoreBtn)
+        }
         val bottomPanel = JPanel(BorderLayout()).apply {
-            border = JBUI.Borders.empty(4, 0, 4, 8)
+            border = JBUI.Borders.empty(4, 0, 4, 4)
         }
         bottomPanel.add(filterPanel, BorderLayout.WEST)
-        bottomPanel.add(statusLabel, BorderLayout.EAST)
+        bottomPanel.add(bottomEastPanel, BorderLayout.EAST)
 
         add(topPanel, BorderLayout.NORTH)
         add(scrollPane, BorderLayout.CENTER)
@@ -390,6 +444,27 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             syncBtn.foreground = null
             syncBtn.toolTipText = null
         }
+        updateSaveRestoreButtonStates()
+    }
+
+    private fun updateSaveRestoreButtonStates() {
+        saveBtn.isEnabled = service.hasLocalModules()
+        service.hasSavedSnapshotForCurrentBranch { hasSnapshot ->
+            restoreBtn.isEnabled = hasSnapshot
+        }
+    }
+
+    /**
+     * 将按钮图标短暂替换为对勾，1.5 秒后还原为 [originalIcon] 并恢复 enabled 状态。
+     * 在 EDT 调用。
+     */
+    private fun flashSuccessIcon(btn: JButton, originalIcon: javax.swing.Icon) {
+        btn.icon = AllIcons.Actions.Checked
+        btn.isEnabled = true
+        javax.swing.Timer(1500) {
+            btn.icon = originalIcon
+            updateSaveRestoreButtonStates()
+        }.apply { isRepeats = false; start() }
     }
 
     private fun onToggleIncludeBuild(row: Int, value: Boolean) {

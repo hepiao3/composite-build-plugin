@@ -76,6 +76,12 @@ class CbmProjectService(private val project: Project) {
     /** 上次 Sync 后的勾选状态快照，用于判断是否有未同步的更改 */
     private var _syncedEnabledModules: Set<String> = emptySet()
 
+    /** 分支快照存储：branchName -> Set<moduleName>（LOCAL 状态模块名集合）*/
+    private var _branchSnapshots: MutableMap<String, Set<String>> = mutableMapOf()
+
+    /** 快照文件路径，与 stateFile 同目录 */
+    val snapshotFile: File get() = CbmInitScriptManager.snapshotFileFor(projectRoot)
+
     /** 是否有未同步到 Gradle 的更改（当前勾选状态与上次 Sync 状态不同） */
     val hasUnsavedChanges: Boolean get() = _enabledModules != _syncedEnabledModules
 
@@ -86,6 +92,183 @@ class CbmProjectService(private val project: Project) {
     fun markAsSynced() {
         _syncedEnabledModules = _enabledModules.toSet()
         notifyListeners()
+    }
+
+    // ========== 分支获取 ==========
+
+    /**
+     * 同步获取当前工程主仓库分支名（必须在后台线程调用）。
+     * 返回 null 表示获取失败（非 git 仓库或命令执行出错）。
+     */
+    fun getProjectBranch(): String? {
+        return try {
+            val process = ProcessBuilder("git", "rev-parse", "--abbrev-ref", "HEAD")
+                .directory(projectRoot)
+                .redirectError(ProcessBuilder.Redirect.DISCARD)
+                .start()
+            val result = process.inputStream.bufferedReader().readText().trim()
+            if (process.waitFor() == 0 && result.isNotEmpty()) result else null
+        } catch (e: Exception) {
+            LOG.warn("Failed to get project branch", e)
+            null
+        }
+    }
+
+    // ========== 快照文件读写 ==========
+
+    /**
+     * 从快照文件加载 _branchSnapshots（必须在后台线程调用）。
+     * 文件格式：{ "master": ["module1", "module2"], "feature/xxx": ["module3"] }
+     */
+    private fun loadSnapshotsFromFile() {
+        val file = snapshotFile
+        if (!file.exists()) {
+            _branchSnapshots = mutableMapOf()
+            return
+        }
+        try {
+            val content = file.readText()
+            val result = mutableMapOf<String, Set<String>>()
+            // 解析顶层每个 key（分支名）及其模块数组，支持转义字符
+            val branchRe = Regex(""""((?:[^"\\]|\\.)*)"\s*:\s*\[([\s\S]*?)\]""")
+            branchRe.findAll(content).forEach { match ->
+                val branchName = match.groupValues[1]
+                    .replace("\\\"", "\"")
+                    .replace("\\\\", "\\")
+                val arrayContent = match.groupValues[2]
+                val moduleRe = Regex("\"([^\"]+)\"")
+                val modules = moduleRe.findAll(arrayContent).map { it.groupValues[1] }.toSet()
+                result[branchName] = modules
+            }
+            _branchSnapshots = result
+            LOG.info("Loaded ${result.size} branch snapshots from ${file.absolutePath}")
+        } catch (e: Exception) {
+            LOG.error("Failed to load snapshots file", e)
+            _branchSnapshots = mutableMapOf()
+        }
+    }
+
+    /**
+     * 将 _branchSnapshots 写入快照文件（必须在后台线程调用）。
+     */
+    private fun saveSnapshotsToFile() {
+        val file = snapshotFile
+        try {
+            val sb = StringBuilder()
+            sb.appendLine("{")
+            val entries = _branchSnapshots.entries.toList()
+            entries.forEachIndexed { index, (branch, modules) ->
+                val escapedBranch = branch.replace("\\", "\\\\").replace("\"", "\\\"")
+                val modulesJson = modules.joinToString(", ") { "\"$it\"" }
+                val comma = if (index < entries.size - 1) "," else ""
+                sb.appendLine("  \"$escapedBranch\": [$modulesJson]$comma")
+            }
+            sb.appendLine("}")
+            file.writeText(sb.toString())
+            LOG.info("Saved ${_branchSnapshots.size} branch snapshots to ${file.absolutePath}")
+        } catch (e: Exception) {
+            LOG.error("Failed to save snapshots file", e)
+            throw e
+        }
+    }
+
+    // ========== 快照对外 API ==========
+
+    /** 判断当前是否有任何 LOCAL 状态模块（用于保存按钮 enabled 状态） */
+    fun hasLocalModules(): Boolean = _enabledModules.isNotEmpty()
+
+    /**
+     * 异步检查当前分支是否已有快照（用于恢复按钮 enabled 状态）。
+     * [onResult] 在 EDT 执行。
+     */
+    fun hasSavedSnapshotForCurrentBranch(onResult: (Boolean) -> Unit) {
+        ApplicationManager.getApplication().executeOnPooledThread {
+            val branch = getProjectBranch()
+            val has = branch != null && _branchSnapshots.containsKey(branch)
+            ApplicationManager.getApplication().invokeLater { onResult(has) }
+        }
+    }
+
+    /**
+     * 将当前 LOCAL 模块列表保存为当前工程主分支的快照。
+     * [onComplete] 在 EDT 执行，参数为是否成功。
+     */
+    fun saveLocalSnapshot(onComplete: ((Boolean) -> Unit)? = null) {
+        ApplicationManager.getApplication().executeOnPooledThread {
+            val branch = getProjectBranch()
+            if (branch == null) {
+                LOG.warn("saveLocalSnapshot: cannot determine current branch")
+                ApplicationManager.getApplication().invokeLater { onComplete?.invoke(false) }
+                return@executeOnPooledThread
+            }
+            val snapshot = _enabledModules.toSet()
+            if (snapshot.isEmpty()) {
+                LOG.info("saveLocalSnapshot: no LOCAL modules, skip saving for branch '$branch'")
+                ApplicationManager.getApplication().invokeLater { onComplete?.invoke(false) }
+                return@executeOnPooledThread
+            }
+            try {
+                _branchSnapshots[branch] = snapshot
+                saveSnapshotsToFile()
+                LOG.info("Saved snapshot for branch '$branch': ${snapshot.size} modules")
+                ApplicationManager.getApplication().invokeLater { onComplete?.invoke(true) }
+            } catch (e: Exception) {
+                ApplicationManager.getApplication().invokeLater { onComplete?.invoke(false) }
+            }
+        }
+    }
+
+    /**
+     * 恢复当前分支的快照：快照中的模块设为 LOCAL，其余设为 MAVEN。
+     * [onComplete] 在 EDT 执行，参数为是否成功（无快照时为 false）。
+     */
+    fun restoreLocalSnapshot(onComplete: ((Boolean) -> Unit)? = null) {
+        ApplicationManager.getApplication().executeOnPooledThread {
+            val branch = getProjectBranch()
+            if (branch == null) {
+                LOG.warn("restoreLocalSnapshot: cannot determine current branch")
+                ApplicationManager.getApplication().invokeLater { onComplete?.invoke(false) }
+                return@executeOnPooledThread
+            }
+            val snapshot = _branchSnapshots[branch]
+            if (snapshot == null) {
+                LOG.info("restoreLocalSnapshot: no snapshot for branch '$branch'")
+                ApplicationManager.getApplication().invokeLater { onComplete?.invoke(false) }
+                return@executeOnPooledThread
+            }
+
+            // 记录变更前状态，用于回滚
+            val prevEnabledModules = _enabledModules.toSet()
+            val prevModules = _modules.toList()
+
+            // 乐观更新内存：快照中的 → enable，其余 → disable
+            _modules.forEachIndexed { i, m ->
+                val newVal = snapshot.contains(m.name)
+                if (m.includeBuild != newVal) {
+                    _modules[i] = m.copy(includeBuild = newVal)
+                }
+            }
+            _enabledModules = snapshot.intersect(_modules.map { it.name }.toSet()).toMutableSet()
+
+            try {
+                saveEnabledModulesToStateFile()
+                LOG.info("Restored snapshot for branch '$branch': ${_enabledModules.size} LOCAL modules")
+                ApplicationManager.getApplication().invokeLater {
+                    notifyListeners()
+                    onComplete?.invoke(true)
+                }
+            } catch (e: Exception) {
+                LOG.error("Failed to save state after restore", e)
+                // 回滚内存
+                _modules.clear()
+                _modules.addAll(prevModules)
+                _enabledModules = prevEnabledModules.toMutableSet()
+                ApplicationManager.getApplication().invokeLater {
+                    notifyListeners()
+                    onComplete?.invoke(false)
+                }
+            }
+        }
     }
 
     // ========== 状态文件读写 ==========
@@ -206,6 +389,8 @@ class CbmProjectService(private val project: Project) {
         ApplicationManager.getApplication().executeOnPooledThread {
             // 1. 从状态文件加载启用状态
             _enabledModules = loadEnabledModulesFromStateFile().toMutableSet()
+            // 同步加载分支快照
+            loadSnapshotsFromFile()
             // 状态文件即为上次 Sync 后的结果，初始快照与之保持一致，避免重启后按钮误报红
             _syncedEnabledModules = _enabledModules.toSet()
 

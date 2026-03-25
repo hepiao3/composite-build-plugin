@@ -25,6 +25,14 @@ object CbmInitScriptManager {
         return File(dir, "$hash.json")
     }
 
+    /** 根据工程根目录计算对应的分支快照文件路径，与 stateFile 同目录 */
+    fun snapshotFileFor(projectRoot: File): File {
+        val hash = Integer.toUnsignedString(projectRoot.absolutePath.hashCode(), 16)
+        val dir = File(System.getProperty("user.home"), ".gradle/cbm")
+        dir.mkdirs()
+        return File(dir, "$hash-snapshots.json")
+    }
+
     /**
      * 将插件 JAR 内的 cbm.init.gradle 部署到 ~/.gradle/init.d/cbm.gradle。
      * 仅在内容变化时写入，避免触发不必要的 Gradle 缓存失效。
