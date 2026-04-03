@@ -31,7 +31,7 @@ object Json5ConfigManager {
     private val LOG = logger<Json5ConfigManager>()
 
     // 匹配模块名键：  "moduleName": {
-    private val MODULE_KEY_RE = Regex("""^\s*"(\w+)"\s*:\s*\{""")
+    private val MODULE_KEY_RE = Regex("""^\s*"([\w-]+)"\s*:\s*\{""")
     // 匹配 url 字段
     private val URL_RE = Regex("""^\s*"url"\s*:\s*"([^"]+)"""")
     // 匹配 includeBuild 字段
