@@ -74,6 +74,9 @@ class CbmProjectService(private val project: Project) {
 
     /** 手动添加的自定义组件：name -> absolutePath */
     private var _customModuleEntries: MutableMap<String, String> = mutableMapOf()
+
+    /** 手动添加的自定义组件依赖替换规则：name -> List<DepSubstitution> */
+    private var _customModuleDeps: MutableMap<String, List<com.jdme.cbm.model.DepSubstitution>> = mutableMapOf()
     val enabledModules: Set<String> get() = _enabledModules.toSet()
 
     /** 上次 Sync 后的勾选状态快照，用于判断是否有未同步的更改 */
@@ -299,6 +302,12 @@ class CbmProjectService(private val project: Project) {
                 _customModuleEntries = entryRe.findAll(customMatch.groupValues[1])
                     .associate { it.groupValues[1] to it.groupValues[2] }
                     .toMutableMap()
+                val depsRe = Regex(""""name"\s*:\s*"([^"]+)"[^}]*"deps"\s*:\s*"([^"]+)"""")
+                _customModuleDeps = depsRe.findAll(customMatch.groupValues[1])
+                    .associate { m ->
+                        m.groupValues[1] to com.jdme.cbm.model.DepSubstitution.parseList(m.groupValues[2])
+                    }
+                    .toMutableMap()
                 LOG.info("Loaded ${_customModuleEntries.size} custom modules from state file")
             }
 
@@ -371,6 +380,9 @@ class CbmProjectService(private val project: Project) {
                 if (module.isCustom && module.customPath != null) {
                     parts.add("\"path\": \"${module.customPath}\"")
                 }
+                if (module.isCustom && module.customDeps.isNotEmpty()) {
+                    parts.add("\"deps\": \"${com.jdme.cbm.model.DepSubstitution.toCompactList(module.customDeps)}\"")
+                }
                 if (flavorAware) {
                     parts.add("\"flavorAware\": true")
                 }
@@ -384,7 +396,11 @@ class CbmProjectService(private val project: Project) {
                 val customEntries = _customModuleEntries.entries.toList()
                 customEntries.forEachIndexed { index, (name, path) ->
                     val comma = if (index < customEntries.size - 1) "," else ""
-                    sb.appendLine("    { \"name\": \"$name\", \"path\": \"$path\" }$comma")
+                    val deps = _customModuleDeps[name]
+                    val depsPart = if (!deps.isNullOrEmpty())
+                        ", \"deps\": \"${com.jdme.cbm.model.DepSubstitution.toCompactList(deps)}\""
+                    else ""
+                    sb.appendLine("    { \"name\": \"$name\", \"path\": \"$path\"$depsPart }$comma")
                 }
                 sb.appendLine("  ],")
             }
@@ -448,7 +464,8 @@ class CbmProjectService(private val project: Project) {
                         includeBuild = _enabledModules.contains(name),
                         localDirExists = java.io.File(path).exists(),
                         isCustom = true,
-                        customPath = path
+                        customPath = path,
+                        customDeps = _customModuleDeps[name] ?: emptyList()
                     )
                 }
 
@@ -499,28 +516,34 @@ class CbmProjectService(private val project: Project) {
      * 组件名取文件夹名，路径为绝对路径，默认 includeBuild=false（MAVEN 状态）。
      * 若同名组件已存在则忽略。
      */
-    fun addCustomModule(name: String, path: String) {
+    fun addCustomModule(name: String, path: String, deps: List<com.jdme.cbm.model.DepSubstitution> = emptyList()) {
         if (_modules.any { it.name == name }) {
             LOG.info("addCustomModule: module '$name' already exists, skip")
             return
         }
         _customModuleEntries[name] = path
+        if (deps.isNotEmpty()) _customModuleDeps[name] = deps
+        // 新添加的自定义组件默认为 MAVEN 模式（includeBuild=false），用户可在侧边面板手动启用
         val newModule = ModuleConfig(
             name = name,
             url = "",
             includeBuild = false,
             localDirExists = java.io.File(path).exists(),
             isCustom = true,
-            customPath = path
+            customPath = path,
+            customDeps = deps
         )
         _modules.add(newModule)
 
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
                 saveEnabledModulesToStateFile()
-                LOG.info("Custom module '$name' added and persisted (path=$path)")
+                // 生成 include_build.gradle 文件
+                val includeFile = File(projectRoot, "include_build.gradle")
+                IncludeBuildWriter.generate(includeFile, _modules, projectRoot)
+                LOG.info("Custom module '$name' added and persisted (path=$path, includeBuild=false)")
             } catch (e: Exception) {
-                LOG.error("Failed to save state file after adding custom module", e)
+                LOG.error("Failed to save state file or generate include_build.gradle after adding custom module", e)
             }
             ApplicationManager.getApplication().invokeLater { notifyListeners() }
         }
@@ -536,17 +559,26 @@ class CbmProjectService(private val project: Project) {
             return
         }
         _customModuleEntries.remove(name)
+        _customModuleDeps.remove(name)
         _modules.removeIf { it.name == name && it.isCustom }
         _enabledModules.remove(name)
 
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
+                // 1. 保存状态文件
                 saveEnabledModulesToStateFile()
-                LOG.info("Custom module '$name' removed and state file saved")
+
+                // 2. 生成 include_build.gradle 文件
+                val includeFile = File(projectRoot, "include_build.gradle")
+                IncludeBuildWriter.generate(includeFile, _modules, projectRoot)
+                LOG.info("Custom module '$name' removed and state file saved [include_build.gradle generated]")
+
+                // 3. 重新加载所有模块（包含 JSON5 中的组件）
+                loadModules()
             } catch (e: Exception) {
-                LOG.error("Failed to save state file after removing custom module", e)
+                LOG.error("Failed to remove custom module", e)
+                ApplicationManager.getApplication().invokeLater { notifyListeners() }
             }
-            ApplicationManager.getApplication().invokeLater { notifyListeners() }
         }
     }
 
@@ -580,10 +612,13 @@ class CbmProjectService(private val project: Project) {
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
                 saveEnabledModulesToStateFile()
-                LOG.info("$moduleName.includeBuild = $value  [state file saved]")
+                // 生成 include_build.gradle 文件
+                val includeFile = File(projectRoot, "include_build.gradle")
+                IncludeBuildWriter.generate(includeFile, _modules, projectRoot)
+                LOG.info("$moduleName.includeBuild = $value  [state file saved, include_build.gradle generated]")
                 ApplicationManager.getApplication().invokeLater { notifyListeners() }
             } catch (e: Exception) {
-                LOG.error("Failed to save state file", e)
+                LOG.error("Failed to save state file or generate include_build.gradle", e)
                 // 回滚内存状态
                 _modules[idx] = _modules[idx].copy(includeBuild = !value)
                 if (value) _enabledModules.remove(moduleName) else _enabledModules.add(moduleName)
@@ -617,7 +652,10 @@ class CbmProjectService(private val project: Project) {
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
                 saveEnabledModulesToStateFile()
-                LOG.info("Batch set ${moduleNames.size} modules to includeBuild=$value")
+                // 生成 include_build.gradle 文件
+                val includeFile = File(projectRoot, "include_build.gradle")
+                IncludeBuildWriter.generate(includeFile, _modules, projectRoot)
+                LOG.info("Batch set ${moduleNames.size} modules to includeBuild=$value [include_build.gradle generated]")
             } catch (e: Exception) {
                 LOG.error("Batch update failed", e)
                 // 回滚

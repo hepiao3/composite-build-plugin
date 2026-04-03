@@ -3,6 +3,28 @@ package com.jdme.cbm.model
 import java.io.File
 
 /**
+ * 自定义组件的依赖替换规则：将 [dep]（group:artifact）替换为本地 [project]（:projectPath）。
+ * 持久化格式：compact string = "group:artifact=:projectPath"
+ */
+data class DepSubstitution(val dep: String, val project: String) {
+    fun toCompact(): String = "$dep=$project"
+
+    companion object {
+        fun fromCompact(s: String): DepSubstitution? {
+            val idx = s.indexOf('=')
+            if (idx < 0) return null
+            return DepSubstitution(dep = s.substring(0, idx), project = s.substring(idx + 1))
+        }
+
+        fun parseList(compact: String): List<DepSubstitution> =
+            compact.split("|").mapNotNull { fromCompact(it.trim()) }
+
+        fun toCompactList(subs: List<DepSubstitution>): String =
+            subs.joinToString("|") { it.toCompact() }
+    }
+}
+
+/**
  * 表示单个子模块的配置。
  *
  * @param name             模块名称（如 "jm_common"），对应 JSON5 的键名
@@ -20,7 +42,8 @@ data class ModuleConfig(
     val localDirExists: Boolean,
     val flavorAware: Boolean = false,
     val isCustom: Boolean = false,
-    val customPath: String? = null
+    val customPath: String? = null,
+    val customDeps: List<DepSubstitution> = emptyList()
 ) {
     /** 模块本地目录名：约定为 moduleName_project，位于主工程父目录 */
     val localDirName: String get() = "${name}_project"

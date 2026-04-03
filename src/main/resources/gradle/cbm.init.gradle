@@ -76,6 +76,24 @@ gradle.settingsEvaluated { settings ->
                     }
                 }
                 println "[CBM] includeBuild (flavor=${activeFlavor}): ${mod.name} -> ${modPath}"
+            } else if (mod.deps) {
+                // 自定义组件：按 deps 字段做精确 dependencySubstitution
+                // deps 格式：compact list，如 "com.example:lib=:lib|com.example:core=:core"
+                def subRules = (mod.deps as String).split("\\|").collectEntries { entry ->
+                    def idx = entry.indexOf('=')
+                    idx >= 0 ? [(entry.substring(0, idx).trim()): entry.substring(idx + 1).trim()] : [:]
+                }
+                settings.includeBuild(modPath) {
+                    dependencySubstitution {
+                        subRules.each { dep, proj ->
+                            def parts = dep.split(":")
+                            if (parts.size() == 2) {
+                                substitute module("${parts[0]}:${parts[1]}") using project(proj)
+                            }
+                        }
+                    }
+                }
+                println "[CBM] includeBuild (deps substitution): ${mod.name} -> ${modPath}"
             } else {
                 settings.includeBuild(modPath)
                 println "[CBM] includeBuild: ${mod.name} -> ${modPath}"

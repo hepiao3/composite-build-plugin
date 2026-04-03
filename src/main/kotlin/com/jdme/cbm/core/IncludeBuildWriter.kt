@@ -48,7 +48,9 @@ object IncludeBuildWriter {
             sb.appendLine()
 
             for (module in localModules) {
-                val localDir = if (projectParent != null) {
+                val localDir = if (module.isCustom && module.customPath != null) {
+                    File(module.customPath)
+                } else if (projectParent != null) {
                     File(projectParent, module.localDirName)
                 } else {
                     File("../${module.localDirName}")
@@ -59,7 +61,19 @@ object IncludeBuildWriter {
                 } catch (e: Exception) {
                     localDir.absolutePath
                 }
-                sb.appendLine("includeBuild('$relativePath')")
+
+                // 有 dependencySubstitution 时生成完整块，否则简单写法
+                if (module.customDeps.isNotEmpty()) {
+                    sb.appendLine("includeBuild('$relativePath') {")
+                    sb.appendLine("    dependencySubstitution {")
+                    for (dep in module.customDeps) {
+                        sb.appendLine("        substitute module('${dep.dep}') using project('${dep.project}')")
+                    }
+                    sb.appendLine("    }")
+                    sb.appendLine("}")
+                } else {
+                    sb.appendLine("includeBuild('$relativePath')")
+                }
                 sb.appendLine()
             }
         }
