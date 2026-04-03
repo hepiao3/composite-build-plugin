@@ -3,6 +3,8 @@ package com.jdme.cbm.ui
 import com.intellij.execution.filters.TextConsoleBuilderFactory
 import com.intellij.execution.ui.ConsoleView
 import com.intellij.icons.AllIcons
+import com.intellij.openapi.fileChooser.FileChooser
+import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.popup.JBPopup
@@ -79,6 +81,14 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val filterLocalCheckBox = JCheckBox("LOCAL")
     private val filterMavenCheckBox = JCheckBox("MAVEN")
     private var filterStatus: ModuleStatus? = null
+
+    // 添加组件按钮
+    private val addModuleBtn = JButton(AllIcons.General.Add).apply {
+        toolTipText = "手动添加本地组件文件夹"
+        preferredSize = java.awt.Dimension(JBUI.scale(24), JBUI.scale(24))
+        border = JBUI.Borders.empty(2)
+        isContentAreaFilled = false
+    }
 
     // 保存/恢复图标按钮
     private val saveBtn = JButton(AllIcons.Actions.MenuSaveall).apply {
@@ -325,6 +335,16 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
                 }
             }
         }
+        addModuleBtn.addActionListener {
+            val descriptor = FileChooserDescriptorFactory.createSingleFolderDescriptor().apply {
+                title = "选择本地组件文件夹"
+            }
+            FileChooser.chooseFile(descriptor, project, null) { vFile ->
+                val name = vFile.name
+                val path = vFile.path
+                service.addCustomModule(name, path)
+            }
+        }
         val filterPanel = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(4), 0)).apply {
             isOpaque = false
             add(filterLocalCheckBox)
@@ -333,6 +353,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         val bottomEastPanel = JPanel(FlowLayout(FlowLayout.RIGHT, JBUI.scale(4), 0)).apply {
             isOpaque = false
             add(statusLabel)
+            add(addModuleBtn)
             add(saveBtn)
             add(restoreBtn)
         }

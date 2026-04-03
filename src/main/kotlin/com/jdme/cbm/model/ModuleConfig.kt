@@ -3,20 +3,24 @@ package com.jdme.cbm.model
 import java.io.File
 
 /**
- * 表示 project-repos.json5 中单个子模块的配置。
+ * 表示单个子模块的配置。
  *
  * @param name             模块名称（如 "jm_common"），对应 JSON5 的键名
  * @param url              Git 仓库地址
  * @param includeBuild     是否启用复合构建（对应 JSON5 中的 includeBuild 字段）
- * @param localDirExists   运行时检测：本地目录（../name_project）是否存在
- * @param flavorAware        是否需要跟随主工程变种做 dependencySubstitution（对应 JSON5 的 flavorAware 字段）
+ * @param localDirExists   运行时检测：本地目录是否存在
+ * @param flavorAware      是否需要跟随主工程变种做 dependencySubstitution（对应 JSON5 的 flavorAware 字段）
+ * @param isCustom         是否为手动添加的自定义组件（不来自 project-repos.json5）
+ * @param customPath       自定义组件的绝对路径（isCustom=true 时有效）
  */
 data class ModuleConfig(
     val name: String,
     val url: String,
     var includeBuild: Boolean,
     val localDirExists: Boolean,
-    val flavorAware: Boolean = false
+    val flavorAware: Boolean = false,
+    val isCustom: Boolean = false,
+    val customPath: String? = null
 ) {
     /** 模块本地目录名：约定为 moduleName_project，位于主工程父目录 */
     val localDirName: String get() = "${name}_project"
@@ -45,6 +49,7 @@ enum class ModuleStatus(val displayName: String, val icon: String) {
 
 /** 根据主工程根目录检测模块本地目录是否存在 */
 fun ModuleConfig.checkLocalDir(projectRoot: File): Boolean {
+    if (isCustom && customPath != null) return File(customPath).exists()
     val parentDir = projectRoot.parentFile ?: return false
     return File(parentDir, localDirName).exists()
 }
@@ -53,11 +58,21 @@ fun ModuleConfig.checkLocalDir(projectRoot: File): Boolean {
 fun ModuleConfig.withRefreshedDirStatus(projectRoot: File): ModuleConfig =
     copy(localDirExists = checkLocalDir(projectRoot))
 
+/**
+ * 解析本地目录 File：
+ * - 自定义组件直接使用 customPath
+ * - 普通组件使用 ../moduleName_project 约定
+ */
+fun ModuleConfig.resolveLocalDir(projectRoot: File): File? {
+    if (isCustom && customPath != null) return File(customPath)
+    val parentDir = projectRoot.parentFile ?: return null
+    return File(parentDir, localDirName)
+}
+
 /** 获取本地 Git 仓库的当前分支（如果本地目录存在） */
 fun ModuleConfig.getLocalGitBranch(projectRoot: File): String? {
     if (!localDirExists) return null
-    val parentDir = projectRoot.parentFile ?: return null
-    val localDir = File(parentDir, localDirName)
+    val localDir = resolveLocalDir(projectRoot) ?: return null
     return getGitBranch(localDir)
 }
 
@@ -82,8 +97,7 @@ private fun getGitBranch(dir: File): String? {
  */
 fun ModuleConfig.getAllBranches(projectRoot: File): List<String> {
     if (!localDirExists) return emptyList()
-    val parentDir = projectRoot.parentFile ?: return emptyList()
-    val localDir = File(parentDir, localDirName)
+    val localDir = resolveLocalDir(projectRoot) ?: return emptyList()
     if (!localDir.isDirectory) return emptyList()
 
     try {
@@ -147,8 +161,7 @@ fun ModuleConfig.getAllBranches(projectRoot: File): List<String> {
  */
 fun ModuleConfig.hasUncommittedChanges(projectRoot: File): Boolean {
     if (!localDirExists) return false
-    val parentDir = projectRoot.parentFile ?: return false
-    val localDir = File(parentDir, localDirName)
+    val localDir = resolveLocalDir(projectRoot) ?: return false
     if (!localDir.isDirectory) return false
     return try {
         val process = ProcessBuilder("git", "status", "--porcelain")
@@ -168,8 +181,7 @@ fun ModuleConfig.hasUncommittedChanges(projectRoot: File): Boolean {
  */
 fun ModuleConfig.checkoutBranch(projectRoot: File, branchName: String): String? {
     if (!localDirExists) return "本地目录不存在"
-    val parentDir = projectRoot.parentFile ?: return "无法获取父目录"
-    val localDir = File(parentDir, localDirName)
+    val localDir = resolveLocalDir(projectRoot) ?: return "无法获取父目录"
     if (!localDir.isDirectory) return "本地目录不存在"
 
     return try {

@@ -44,16 +44,16 @@ gradle.settingsEvaluated { settings ->
         println "[CBM] groupId=${groupId}, activeFlavor=${activeFlavor}, modules=${modules.size()}"
 
         modules.each { mod ->
-            def modPath = "../${mod.name}_project"
-            def modDir = new File(settings.rootDir, modPath)
+            def modDir = mod.path ? new File(mod.path as String) : new File(settings.rootDir, "../${mod.name}_project")
+            def modPath = modDir.absolutePath
             if (!modDir.exists()) {
-                println "[WARN] CBM skipped: ${mod.name}_project not found"
+                println "[WARN] CBM skipped: ${mod.name} not found at ${modPath}"
                 return
             }
             if (mod.flavorAware && groupId && activeFlavor) {
                 // 读取该 included build 实际包含的 project 名单，用于精确匹配
                 def includedProjects = getIncludedProjectNames(modDir)
-                println "[CBM] ${mod.name}_project projects: ${includedProjects}"
+                println "[CBM] ${mod.name} projects: ${includedProjects}"
                 settings.includeBuild(modPath) {
                     dependencySubstitution {
                         all { DependencySubstitution dep ->
@@ -75,10 +75,10 @@ gradle.settingsEvaluated { settings ->
                         }
                     }
                 }
-                println "[CBM] includeBuild (flavor=${activeFlavor}): ${mod.name}"
+                println "[CBM] includeBuild (flavor=${activeFlavor}): ${mod.name} -> ${modPath}"
             } else {
                 settings.includeBuild(modPath)
-                println "[CBM] includeBuild: ${mod.name}"
+                println "[CBM] includeBuild: ${mod.name} -> ${modPath}"
             }
         }
     } catch (Exception e) {

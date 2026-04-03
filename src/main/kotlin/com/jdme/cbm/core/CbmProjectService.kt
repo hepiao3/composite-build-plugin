@@ -71,6 +71,9 @@ class CbmProjectService(private val project: Project) {
 
     /** 已启用复合构建的模块名集合 */
     private var _enabledModules: MutableSet<String> = mutableSetOf()
+
+    /** 手动添加的自定义组件：name -> absolutePath */
+    private var _customModuleEntries: MutableMap<String, String> = mutableMapOf()
     val enabledModules: Set<String> get() = _enabledModules.toSet()
 
     /** 上次 Sync 后的勾选状态快照，用于判断是否有未同步的更改 */
@@ -276,6 +279,7 @@ class CbmProjectService(private val project: Project) {
     /**
      * 从 .cbm-include-build.json 加载启用状态。
      * 支持新格式（modules 数组）和旧格式（enabledModules 数组）兼容读取。
+     * 同时加载 customModules 数组到 _customModuleEntries。
      */
     private fun loadEnabledModulesFromStateFile(): Set<String> {
         val file = stateFile
@@ -286,6 +290,17 @@ class CbmProjectService(private val project: Project) {
 
         return try {
             val content = file.readText()
+
+            // 加载自定义组件：customModules 数组
+            val customModulesRe = Regex(""""customModules"\s*:\s*\[([\s\S]*?)\]""")
+            val customMatch = customModulesRe.find(content)
+            if (customMatch != null) {
+                val entryRe = Regex(""""name"\s*:\s*"([^"]+)"[^}]*"path"\s*:\s*"([^"]+)"""")
+                _customModuleEntries = entryRe.findAll(customMatch.groupValues[1])
+                    .associate { it.groupValues[1] to it.groupValues[2] }
+                    .toMutableMap()
+                LOG.info("Loaded ${_customModuleEntries.size} custom modules from state file")
+            }
 
             // 新格式：从 modules 数组中提取 name 字段
             val modulesArrayRe = Regex(""""modules"\s*:\s*\[([\s\S]*?)\]""")
@@ -352,13 +367,28 @@ class CbmProjectService(private val project: Project) {
             enabledList.forEachIndexed { index, module ->
                 val comma = if (index < enabledList.size - 1) "," else ""
                 val flavorAware = latestFlavorMap[module.name] ?: module.flavorAware
-                if (flavorAware) {
-                    sb.appendLine("    { \"name\": \"${module.name}\", \"flavorAware\": true }$comma")
-                } else {
-                    sb.appendLine("    { \"name\": \"${module.name}\" }$comma")
+                val parts = mutableListOf("\"name\": \"${module.name}\"")
+                if (module.isCustom && module.customPath != null) {
+                    parts.add("\"path\": \"${module.customPath}\"")
                 }
+                if (flavorAware) {
+                    parts.add("\"flavorAware\": true")
+                }
+                sb.appendLine("    { ${parts.joinToString(", ")} }$comma")
             }
             sb.appendLine("  ],")
+
+            // customModules 数组（手动添加的组件）
+            if (_customModuleEntries.isNotEmpty()) {
+                sb.appendLine("  \"customModules\": [")
+                val customEntries = _customModuleEntries.entries.toList()
+                customEntries.forEachIndexed { index, (name, path) ->
+                    val comma = if (index < customEntries.size - 1) "," else ""
+                    sb.appendLine("    { \"name\": \"$name\", \"path\": \"$path\" }$comma")
+                }
+                sb.appendLine("  ],")
+            }
+
             sb.appendLine("  \"updatedAt\": \"${java.time.LocalDateTime.now()}\"")
             sb.appendLine("}")
 
@@ -403,9 +433,26 @@ class CbmProjectService(private val project: Project) {
             }
 
             // 3. 根据状态文件设置模块的 includeBuild 状态
-            _modules = loaded.map { module ->
+            val jsonModules = loaded.map { module ->
                 module.copy(includeBuild = _enabledModules.contains(module.name))
-            }.toMutableList()
+            }
+
+            // 4. 合并自定义组件（跳过与 json5 同名的条目）
+            val jsonModuleNames = jsonModules.map { it.name }.toSet()
+            val customModules = _customModuleEntries
+                .filterKeys { it !in jsonModuleNames }
+                .map { (name, path) ->
+                    ModuleConfig(
+                        name = name,
+                        url = "",
+                        includeBuild = _enabledModules.contains(name),
+                        localDirExists = java.io.File(path).exists(),
+                        isCustom = true,
+                        customPath = path
+                    )
+                }
+
+            _modules = (jsonModules + customModules).toMutableList()
 
             ApplicationManager.getApplication().invokeLater {
                 notifyListeners()
@@ -444,6 +491,38 @@ class CbmProjectService(private val project: Project) {
                     notifyListeners()
                 }
             }
+        }
+    }
+
+    /**
+     * 手动添加一个本地文件夹作为自定义组件。
+     * 组件名取文件夹名，路径为绝对路径，默认 includeBuild=false（MAVEN 状态）。
+     * 若同名组件已存在则忽略。
+     */
+    fun addCustomModule(name: String, path: String) {
+        if (_modules.any { it.name == name }) {
+            LOG.info("addCustomModule: module '$name' already exists, skip")
+            return
+        }
+        _customModuleEntries[name] = path
+        val newModule = ModuleConfig(
+            name = name,
+            url = "",
+            includeBuild = false,
+            localDirExists = java.io.File(path).exists(),
+            isCustom = true,
+            customPath = path
+        )
+        _modules.add(newModule)
+
+        ApplicationManager.getApplication().executeOnPooledThread {
+            try {
+                saveEnabledModulesToStateFile()
+                LOG.info("Custom module '$name' added and persisted (path=$path)")
+            } catch (e: Exception) {
+                LOG.error("Failed to save state file after adding custom module", e)
+            }
+            ApplicationManager.getApplication().invokeLater { notifyListeners() }
         }
     }
 
