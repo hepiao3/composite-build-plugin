@@ -490,6 +490,17 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         filterLocalCheckBox.text = "LOCAL ($localCount)"
         filterMavenCheckBox.text = "MAVEN ($mavenCount)"
         filterCustomCheckBox.text = "CUSTOM ($customCount)"
+        // 数量为 0 时自动取消勾选并置灰
+        if (localCount == 0 && filterLocalCheckBox.isSelected) {
+            filterLocalCheckBox.isSelected = false
+            filterStatus = null
+        }
+        filterLocalCheckBox.isEnabled = localCount > 0
+        if (customCount == 0 && filterCustomCheckBox.isSelected) {
+            filterCustomCheckBox.isSelected = false
+            filterCustom = false
+        }
+        filterCustomCheckBox.isEnabled = customCount > 0
         statusLabel.text = if (missingCount > 0) "未下载: $missingCount" else ""
         if (service.hasUnsavedChanges) {
             syncBtn.text = "⚠ Sync Gradle"
