@@ -245,13 +245,18 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             columnModel.getColumn(COL_STATUS).cellRenderer = StatusRenderer()
         }
 
-        // 表头全选复选框
+        // 表头全选复选框（CUSTOM 模式下隐藏）
+        val emptyHeaderLabel = JLabel()
         table.tableHeader.columnModel.getColumn(COL_CHECKED).headerRenderer =
             object : javax.swing.table.TableCellRenderer {
                 override fun getTableCellRendererComponent(
                     t: JTable, value: Any?, isSelected: Boolean,
                     hasFocus: Boolean, row: Int, col: Int
                 ): java.awt.Component {
+                    if (filterCustom) {
+                        emptyHeaderLabel.background = table.tableHeader.background
+                        return emptyHeaderLabel
+                    }
                     headerCheckBox.background = table.tableHeader.background
                     val allChecked = displayedModules.isNotEmpty() && displayedModules.all { it.includeBuild }
                     headerCheckBox.isSelected = allChecked
@@ -260,6 +265,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             }
         table.tableHeader.addMouseListener(object : java.awt.event.MouseAdapter() {
             override fun mouseClicked(e: java.awt.event.MouseEvent) {
+                if (filterCustom) return
                 val col = table.tableHeader.columnAtPoint(e.point)
                 if (col != COL_CHECKED) return
                 val allChecked = displayedModules.isNotEmpty() && displayedModules.all { it.includeBuild }
@@ -778,6 +784,8 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         const val COL_STATUS = 2
         const val COL_BRANCH = 3
         const val COL_ACTION = 4
+
+        val DELETE_ICON: javax.swing.Icon = AllIcons.Actions.GC
     }
 
     // ─── 表格数据模型 ──────────────────────────────────────
@@ -827,7 +835,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             horizontalAlignment = SwingConstants.CENTER
             isOpaque = true
         }
-        private val deleteLabel = JLabel(AllIcons.General.Remove).apply {
+        private val deleteLabel = JLabel(DELETE_ICON).apply {
             horizontalAlignment = SwingConstants.CENTER
             isOpaque = true
             cursor = java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR)
@@ -859,7 +867,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         private val onToggle: (Int, Boolean) -> Unit
     ) : DefaultCellEditor(JCheckBox()) {
         private var currentListener: java.awt.event.ActionListener? = null
-        private val deleteBtn = JButton(AllIcons.General.Remove).apply {
+        private val deleteBtn = JButton(DELETE_ICON).apply {
             isContentAreaFilled = false
             border = JBUI.Borders.empty(2)
             cursor = java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR)
