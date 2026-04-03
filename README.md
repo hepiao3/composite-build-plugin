@@ -55,6 +55,7 @@ cd composite-build-plugin/
 
 | 版本 | 新增功能 | Bug 修复 |
 |------|---------|---------|
+| 1.0.8 | 新增 CUSTOM 筛选项及自定义组件删除功能<br>新增手动添加本地组件功能，支持自定义路径持久化及复合构建 | 修复筛选项数量为 0 时未自动取消勾选并置灰<br>修复 CUSTOM 模式下表头全选复选框未隐藏<br>扩展模块键名正则以支持连字符 |
 | 1.0.7 | 新增保存/恢复 LOCAL 模块快照功能，按分支存储，方便切换场景时一键恢复 | 修复勾选模块为 LOCAL 时触发全量分支刷新的问题<br>分支加载仅在初始化和点击 Refresh 按钮时触发 |
 | 1.0.6 | 分支弹窗保留远程分支 origin/ 前缀<br>分支列表优先展示本地分支，再展示远程分支<br>切换远程分支时自动创建同名本地跟踪分支，避免 detached HEAD<br>刷新分支时 LOCAL 模块分支列显示 loading 动画 | 修复刷新分支时 MAVEN 模块分支名消失 |
 | 1.0.5 | 支持 flavor dependencySubstitution 自动生成<br>表头添加全选复选框<br>底部增加 LOCAL / MAVEN 互斥筛选复选框，整合状态统计显示<br>优化分支弹窗交互 | 修复重启后 Sync Gradle 按钮误报红<br>修复 cbm.init.gradle 中多 flavorAware 组件的依赖替换问题<br>修复多 flavorAware 组件同时启用时 dependencySubstitution 互相干扰<br>修复 repositories 块结束后 config/usage 被误解析为模块<br>修复 Refresh 按钮未重新加载 project-repos.json5 |
