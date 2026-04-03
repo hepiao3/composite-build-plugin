@@ -527,6 +527,30 @@ class CbmProjectService(private val project: Project) {
     }
 
     /**
+     * 删除一个手动添加的自定义组件。
+     * 从内存和状态文件中移除，并通知 UI 更新。
+     */
+    fun removeCustomModule(name: String) {
+        if (!_customModuleEntries.containsKey(name)) {
+            LOG.info("removeCustomModule: '$name' not found in custom entries, skip")
+            return
+        }
+        _customModuleEntries.remove(name)
+        _modules.removeIf { it.name == name && it.isCustom }
+        _enabledModules.remove(name)
+
+        ApplicationManager.getApplication().executeOnPooledThread {
+            try {
+                saveEnabledModulesToStateFile()
+                LOG.info("Custom module '$name' removed and state file saved")
+            } catch (e: Exception) {
+                LOG.error("Failed to save state file after removing custom module", e)
+            }
+            ApplicationManager.getApplication().invokeLater { notifyListeners() }
+        }
+    }
+
+    /**
      * 切换指定模块的 includeBuild 状态：
      * 1. 更新内存状态和 _enabledModules
      * 2. 保存到状态文件 .cbm-include-build.json

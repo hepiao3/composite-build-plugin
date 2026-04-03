@@ -80,7 +80,9 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
     // 状态筛选复选框
     private val filterLocalCheckBox = JCheckBox("LOCAL")
     private val filterMavenCheckBox = JCheckBox("MAVEN")
+    private val filterCustomCheckBox = JCheckBox("CUSTOM")
     private var filterStatus: ModuleStatus? = null
+    private var filterCustom = false
 
     // 添加组件按钮
     private val addModuleBtn = JButton(AllIcons.General.Add).apply {
@@ -231,7 +233,9 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
                     minWidth = JBUI.scale(70)
                     preferredWidth = JBUI.scale(70)
                     cellRenderer = ButtonRenderer()
-                    cellEditor = ButtonEditor(table, ::onDownloadClick)
+                    cellEditor = ButtonEditor(table) { row ->
+                        if (filterCustom) onDeleteCustomClick(row) else onDownloadClick(row)
+                    }
                 }
             }
             // 勾选框列
@@ -288,7 +292,9 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         filterLocalCheckBox.addActionListener {
             if (filterLocalCheckBox.isSelected) {
                 filterMavenCheckBox.isSelected = false
+                filterCustomCheckBox.isSelected = false
                 filterStatus = ModuleStatus.LOCAL
+                filterCustom = false
             } else {
                 filterStatus = null
             }
@@ -297,9 +303,22 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         filterMavenCheckBox.addActionListener {
             if (filterMavenCheckBox.isSelected) {
                 filterLocalCheckBox.isSelected = false
+                filterCustomCheckBox.isSelected = false
                 filterStatus = ModuleStatus.MAVEN
+                filterCustom = false
             } else {
                 filterStatus = null
+            }
+            applyFilter()
+        }
+        filterCustomCheckBox.addActionListener {
+            if (filterCustomCheckBox.isSelected) {
+                filterLocalCheckBox.isSelected = false
+                filterMavenCheckBox.isSelected = false
+                filterStatus = null
+                filterCustom = true
+            } else {
+                filterCustom = false
             }
             applyFilter()
         }
@@ -349,6 +368,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             isOpaque = false
             add(filterLocalCheckBox)
             add(filterMavenCheckBox)
+            add(filterCustomCheckBox)
         }
         val bottomEastPanel = JPanel(FlowLayout(FlowLayout.RIGHT, JBUI.scale(4), 0)).apply {
             isOpaque = false
@@ -377,7 +397,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         val statusFilter = filterStatus
         displayedModules = service.modules.filter { module ->
             (query.isEmpty() || module.name.lowercase().contains(query)) &&
-            (statusFilter == null || module.status == statusFilter)
+            if (filterCustom) module.isCustom else (statusFilter == null || module.status == statusFilter)
         }
         tableModel.setData(displayedModules)
         updateStatusLabel()
@@ -460,8 +480,10 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         val localCount = all.count { it.status == ModuleStatus.LOCAL }
         val mavenCount = all.count { it.status == ModuleStatus.MAVEN }
         val missingCount = all.count { it.status == ModuleStatus.MISSING }
+        val customCount = all.count { it.isCustom }
         filterLocalCheckBox.text = "LOCAL ($localCount)"
         filterMavenCheckBox.text = "MAVEN ($mavenCount)"
+        filterCustomCheckBox.text = "CUSTOM ($customCount)"
         statusLabel.text = if (missingCount > 0) "未下载: $missingCount" else ""
         if (service.hasUnsavedChanges) {
             syncBtn.text = "⚠ Sync Gradle"
@@ -517,6 +539,20 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun onDownloadClick(row: Int) {
         val module = displayedModules.getOrNull(row) ?: return
         downloadModule(module)
+    }
+
+    private fun onDeleteCustomClick(row: Int) {
+        val module = displayedModules.getOrNull(row) ?: return
+        val choice = Messages.showYesNoDialog(
+            project,
+            "确认删除自定义组件 「${module.name}」？\n路径：${module.customPath ?: ""}",
+            "删除自定义组件",
+            "删除",
+            "取消",
+            Messages.getWarningIcon()
+        )
+        if (choice != Messages.YES) return
+        service.removeCustomModule(module.name)
     }
 
     private fun downloadModule(module: ModuleConfig) {
@@ -791,6 +827,11 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             horizontalAlignment = SwingConstants.CENTER
             isOpaque = true
         }
+        private val deleteLabel = JLabel(AllIcons.General.Remove).apply {
+            horizontalAlignment = SwingConstants.CENTER
+            isOpaque = true
+            cursor = java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR)
+        }
 
         override fun getTableCellRendererComponent(
             table: JTable, value: Any?, isSelected: Boolean,
@@ -801,6 +842,10 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             if (module != null && module.name in downloadingModules) {
                 loadingLabel.background = bg
                 return loadingLabel
+            }
+            if (filterCustom) {
+                deleteLabel.background = bg
+                return deleteLabel
             }
             cb.isSelected = value as? Boolean ?: false
             cb.background = bg
@@ -814,10 +859,28 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         private val onToggle: (Int, Boolean) -> Unit
     ) : DefaultCellEditor(JCheckBox()) {
         private var currentListener: java.awt.event.ActionListener? = null
+        private val deleteBtn = JButton(AllIcons.General.Remove).apply {
+            isContentAreaFilled = false
+            border = JBUI.Borders.empty(2)
+            cursor = java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR)
+            isFocusable = false
+        }
+        private var deleteRow = -1
+
+        init {
+            deleteBtn.addActionListener {
+                fireEditingStopped()
+                if (deleteRow >= 0) onDeleteCustomClick(deleteRow)
+            }
+        }
 
         override fun getTableCellEditorComponent(
             table: JTable, value: Any?, isSelected: Boolean, row: Int, col: Int
         ): java.awt.Component {
+            if (filterCustom) {
+                deleteRow = row
+                return deleteBtn
+            }
             // 移除旧的 listener，避免重复触发
             currentListener?.let { (editorComponent as JCheckBox).removeActionListener(it) }
 
@@ -852,14 +915,27 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private inner class ButtonRenderer : DefaultTableCellRenderer() {
         private val btn = JButton()
+        private val iconLabel = JLabel().apply {
+            horizontalAlignment = SwingConstants.CENTER
+            isOpaque = true
+        }
         override fun getTableCellRendererComponent(
             table: JTable, value: Any?, isSelected: Boolean,
             hasFocus: Boolean, row: Int, col: Int
         ): java.awt.Component {
-            val text = value as? String ?: ""
-            if (text.isBlank()) return JLabel()
-            btn.text = text
-            return btn
+            val bg = if (isSelected) table.selectionBackground else table.background
+            return when {
+                value is javax.swing.Icon -> {
+                    iconLabel.icon = value
+                    iconLabel.background = bg
+                    iconLabel
+                }
+                value is String && value.isNotBlank() -> {
+                    btn.text = value
+                    btn
+                }
+                else -> JLabel()
+            }
         }
     }
 
@@ -868,10 +944,19 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         private val onClick: (Int) -> Unit
     ) : DefaultCellEditor(JCheckBox()) {
         private val btn = JButton()
+        private val iconBtn = JButton().apply {
+            isContentAreaFilled = false
+            border = JBUI.Borders.empty(4)
+            cursor = java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR)
+        }
         private var row = -1
 
         init {
             btn.addActionListener {
+                fireEditingStopped()
+                if (row >= 0) onClick(row)
+            }
+            iconBtn.addActionListener {
                 fireEditingStopped()
                 if (row >= 0) onClick(row)
             }
@@ -881,8 +966,16 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             t: JTable, value: Any?, isSelected: Boolean, r: Int, col: Int
         ): java.awt.Component {
             row = r
-            btn.text = value as? String ?: ""
-            return btn
+            return when (value) {
+                is javax.swing.Icon -> {
+                    iconBtn.icon = value
+                    iconBtn
+                }
+                else -> {
+                    btn.text = value as? String ?: ""
+                    btn
+                }
+            }
         }
 
         override fun getCellEditorValue(): Any = btn.text
