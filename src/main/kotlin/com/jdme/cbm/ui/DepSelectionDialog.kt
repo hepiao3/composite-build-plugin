@@ -227,7 +227,7 @@ class DepSelectionDialog(
         // 只返回启用且勾选的 radioButton（禁用的已经存在，不需要再添加）
         return radioButtons.filter { (rb, _) -> rb.isEnabled && rb.isSelected }.map { (_, entry) ->
             DepSubstitution(
-                dep = if (cleanedDep.isNotBlank()) cleanedDep else entry.name,
+                dep = cleanedDep.ifBlank { entry.name },
                 project = ":${entry.gradlePath}"  // 添加冒号前缀
             )
         }

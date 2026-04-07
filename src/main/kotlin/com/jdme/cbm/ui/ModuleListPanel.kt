@@ -3,6 +3,7 @@ package com.jdme.cbm.ui
 import com.intellij.execution.filters.TextConsoleBuilderFactory
 import com.intellij.execution.ui.ConsoleView
 import com.intellij.icons.AllIcons
+import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.fileChooser.FileChooser
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.project.Project
@@ -32,6 +33,7 @@ import java.awt.FlowLayout
 import java.awt.Graphics
 import java.awt.event.ComponentAdapter
 import java.awt.event.ComponentEvent
+import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.swing.AbstractCellEditor
@@ -49,6 +51,7 @@ import javax.swing.SwingConstants
 import javax.swing.SwingUtilities
 import javax.swing.table.AbstractTableModel
 import javax.swing.table.DefaultTableCellRenderer
+import java.io.File
 
 /**
  * 复合构建管理器主面板。
@@ -65,6 +68,8 @@ import javax.swing.table.DefaultTableCellRenderer
  * ```
  */
 class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
+
+    private val LOG = logger<ModuleListPanel>()
 
     private val service = CbmProjectService.getInstance(project)
     private val tableModel = ModuleTableModel()
@@ -365,9 +370,48 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
                 title = "选择本地组件文件夹"
             }
             FileChooser.chooseFile(descriptor, project, null) { vFile ->
-                val name = vFile.name
-                val path = vFile.path
-                service.addCustomModule(name, path)
+                try {
+                    val name = vFile.name
+                    val path = vFile.path
+
+                    // 检查同名模块是否已存在
+                    if (service.modules.any { it.name == name }) {
+                        Messages.showErrorDialog(
+                            project,
+                            "已存在同名模块: $name，请选择其他文件夹",
+                            "无法添加"
+                        )
+                        return@chooseFile
+                    }
+
+                    // 检查路径是否已被占用
+                    val existingModule = checkPathAlreadyExists(path)
+                    if (existingModule != null) {
+                        Messages.showErrorDialog(
+                            project,
+                            "路径 $path 已被模块 ${existingModule.name} 使用，无法重复添加",
+                            "无法添加"
+                        )
+                        return@chooseFile
+                    }
+
+                    // 添加模块
+                    service.addCustomModule(name, path)
+
+                    // 显示成功提示
+                    Messages.showInfoMessage(
+                        project,
+                        "已成功添加自定义组件: $name",
+                        "成功"
+                    )
+                } catch (e: Exception) {
+                    LOG.error("Failed to add custom module", e)
+                    Messages.showErrorDialog(
+                        project,
+                        "添加组件失败: ${e.message ?: "未知错误"}",
+                        "错误"
+                    )
+                }
             }
         }
         val filterPanel = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(4), 0)).apply {
@@ -779,6 +823,48 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
     }
 
+    /**
+     * 解析本地模块的绝对路径
+     * @param module 模块配置
+     * @return 本地模块路径，解析失败返回 null
+     */
+    private fun resolveLocalModulePath(module: ModuleConfig): String? = try {
+        val projectRoot = project.basePath?.let(::File) ?: return null
+        val parentDir = projectRoot.parentFile ?: return null
+        File(parentDir, module.localDirName).absolutePath
+    } catch (e: IOException) {
+        null
+    }
+
+    /**
+     * 根据模块类型解析其绝对路径
+     * @param module 模块配置
+     * @return 模块绝对路径，无法解析返回 null
+     */
+    private fun resolveModuleAbsolutePath(module: ModuleConfig): String? = when {
+        module.isCustom && module.customPath != null -> {
+            module.customPath.canonicalPathOrSelf()
+        }
+        !module.isCustom && module.includeBuild -> {
+            resolveLocalModulePath(module)?.canonicalPathOrSelf()
+        }
+        else -> null
+    }
+
+    /**
+     * 检查选中的路径是否已被其他模块占用
+     * @param selectedPath 用户选择的文件夹路径
+     * @return 占用该路径的 ModuleConfig，若无占用者返回 null
+     */
+    private fun checkPathAlreadyExists(selectedPath: String): ModuleConfig? {
+        val selectedCanonical = selectedPath.canonicalPathOrSelf()
+
+        return service.modules.firstOrNull { module ->
+            val existingPath = resolveModuleAbsolutePath(module) ?: return@firstOrNull false
+            selectedCanonical == existingPath
+        }
+    }
+
     private fun getOrCreateConsole(): ConsoleView {
         if (consoleView == null) {
             consoleView = TextConsoleBuilderFactory.getInstance()
@@ -1060,4 +1146,16 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
     }
 
+}
+
+// ─── 扩展函数 ──────────────────────────────────────────
+
+/**
+ * 规范化路径为绝对路径
+ * 如果规范化失败（IOException），则返回原始路径作为降级方案
+ */
+private fun String.canonicalPathOrSelf(): String = try {
+    File(this).canonicalPath
+} catch (e: IOException) {
+    this
 }
