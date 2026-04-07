@@ -528,7 +528,7 @@ class CbmProjectService(private val project: Project) {
             name = name,
             url = "",
             includeBuild = false,
-            localDirExists = java.io.File(path).exists(),
+            localDirExists = File(path).exists(),
             isCustom = true,
             customPath = path,
             customDeps = deps
@@ -538,12 +538,9 @@ class CbmProjectService(private val project: Project) {
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
                 saveEnabledModulesToStateFile()
-                // 生成 include_build.gradle 文件
-                val includeFile = File(projectRoot, "include_build.gradle")
-                IncludeBuildWriter.generate(includeFile, _modules, projectRoot)
                 LOG.info("Custom module '$name' added and persisted (path=$path, includeBuild=false)")
             } catch (e: Exception) {
-                LOG.error("Failed to save state file or generate include_build.gradle after adding custom module", e)
+                LOG.error("Failed to save state file after adding custom module", e)
             }
             ApplicationManager.getApplication().invokeLater { notifyListeners() }
         }
@@ -573,13 +570,9 @@ class CbmProjectService(private val project: Project) {
             try {
                 // 1. 保存状态文件
                 saveEnabledModulesToStateFile()
+                LOG.info("Custom module '$name' removed and state file saved")
 
-                // 2. 生成 include_build.gradle 文件
-                val includeFile = File(projectRoot, "include_build.gradle")
-                IncludeBuildWriter.generate(includeFile, _modules, projectRoot)
-                LOG.info("Custom module '$name' removed and state file saved [include_build.gradle generated]")
-
-                // 3. 重新加载所有模块（包含 JSON5 中的组件）
+                // 2. 重新加载所有模块（包含 JSON5 中的组件）
                 loadModules()
 
                 // 4. 仅在删除的组件是 LOCAL 状态时才触发 Gradle Sync
@@ -625,13 +618,10 @@ class CbmProjectService(private val project: Project) {
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
                 saveEnabledModulesToStateFile()
-                // 生成 include_build.gradle 文件
-                val includeFile = File(projectRoot, "include_build.gradle")
-                IncludeBuildWriter.generate(includeFile, _modules, projectRoot)
-                LOG.info("$moduleName.includeBuild = $value  [state file saved, include_build.gradle generated]")
+                LOG.info("$moduleName.includeBuild = $value  [state file saved]")
                 ApplicationManager.getApplication().invokeLater { notifyListeners() }
             } catch (e: Exception) {
-                LOG.error("Failed to save state file or generate include_build.gradle", e)
+                LOG.error("Failed to save state file", e)
                 // 回滚内存状态
                 _modules[idx] = _modules[idx].copy(includeBuild = !value)
                 if (value) _enabledModules.remove(moduleName) else _enabledModules.add(moduleName)
@@ -665,10 +655,7 @@ class CbmProjectService(private val project: Project) {
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
                 saveEnabledModulesToStateFile()
-                // 生成 include_build.gradle 文件
-                val includeFile = File(projectRoot, "include_build.gradle")
-                IncludeBuildWriter.generate(includeFile, _modules, projectRoot)
-                LOG.info("Batch set ${moduleNames.size} modules to includeBuild=$value [include_build.gradle generated]")
+                LOG.info("Batch set ${moduleNames.size} modules to includeBuild=$value [state file saved]")
             } catch (e: Exception) {
                 LOG.error("Batch update failed", e)
                 // 回滚
