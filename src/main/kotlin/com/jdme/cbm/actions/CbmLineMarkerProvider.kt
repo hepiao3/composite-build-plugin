@@ -46,10 +46,16 @@ class CbmLineMarkerProvider : LineMarkerProvider {
 
         // 从当前行解析 groupId，用于预填到 DepSelectionDialog
         val doc = PsiDocumentManager.getInstance(element.project).getDocument(file)
+
+        // 若 token 前紧跟 '.'，说明是成员访问链（如 libs.api.guide 中的 api），不是依赖关键字
+        val charBefore = doc?.charsSequence?.getOrNull(element.textOffset - 1)
+        if (charBefore == '.') return null
         val lineText = doc?.let {
             val lineNum = it.getLineNumber(element.textOffset)
             it.getText(TextRange(it.getLineStartOffset(lineNum), it.getLineEndOffset(lineNum)))
         }
+        // project(':xxx') 是本地模块依赖，不需要加号
+        if (lineText != null && Regex("""\bproject\s*\(""").containsMatchIn(lineText)) return null
         val depMatch = lineText?.let { stringDepPattern.find(it) }
         val suggestedDep = if (depMatch != null) {
             "${depMatch.groupValues[1]}:${depMatch.groupValues[2]}"
