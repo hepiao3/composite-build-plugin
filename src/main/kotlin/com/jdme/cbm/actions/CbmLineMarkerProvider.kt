@@ -96,6 +96,15 @@ class CbmLineMarkerProvider : LineMarkerProvider {
                         Messages.showErrorDialog(project, "在 settings.gradle 中未检测到任何可用模块", "扫描失败")
                         return@chooseFile
                     }
+                    // 检查同名模块是否已存在
+                    if (service.modules.any { it.name == vFile.name }) {
+                        Messages.showErrorDialog(
+                            project,
+                            "已存在同名模块: ${vFile.name}，请选择其他文件夹",
+                            "无法添加"
+                        )
+                        return@chooseFile
+                    }
                     val dialog = DepSelectionDialog(project, vFile.name, scanResult, service, suggestedDep)
                     if (dialog.showAndGet()) {
                         service.addCustomModule(vFile.name, vFile.path, dialog.getSelectedDeps())
@@ -136,7 +145,7 @@ class CbmLineMarkerProvider : LineMarkerProvider {
             val eqIdx = trimmed.indexOf('=')
             if (eqIdx < 0) continue
 
-            val rawKey = trimmed.substring(0, eqIdx).trim()
+            val rawKey = trimmed.take(eqIdx).trim()
             // TOML key 中 ./-/_ 均视为等价
             val normalizedKey = rawKey.replace('.', '-').replace('_', '-').lowercase()
             if (normalizedKey != normalizedAlias) continue

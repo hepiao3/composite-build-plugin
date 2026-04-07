@@ -4,8 +4,6 @@ import com.intellij.execution.filters.TextConsoleBuilderFactory
 import com.intellij.execution.ui.ConsoleView
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.diagnostic.logger
-import com.intellij.openapi.fileChooser.FileChooser
-import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.popup.JBPopup
@@ -88,14 +86,6 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val filterCustomCheckBox = JCheckBox("CUSTOM")
     private var filterStatus: ModuleStatus? = null
     private var filterCustom = false
-
-    // 添加组件按钮
-    private val addModuleBtn = JButton(AllIcons.General.Add).apply {
-        toolTipText = "手动添加本地组件文件夹"
-        preferredSize = java.awt.Dimension(JBUI.scale(24), JBUI.scale(24))
-        border = JBUI.Borders.empty(2)
-        isContentAreaFilled = false
-    }
 
     // 保存/恢复图标按钮
     private val saveBtn = JButton(AllIcons.Actions.MenuSaveall).apply {
@@ -365,55 +355,6 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
                 }
             }
         }
-        addModuleBtn.addActionListener {
-            val descriptor = FileChooserDescriptorFactory.createSingleFolderDescriptor().apply {
-                title = "选择本地组件文件夹"
-            }
-            FileChooser.chooseFile(descriptor, project, null) { vFile ->
-                try {
-                    val name = vFile.name
-                    val path = vFile.path
-
-                    // 检查同名模块是否已存在
-                    if (service.modules.any { it.name == name }) {
-                        Messages.showErrorDialog(
-                            project,
-                            "已存在同名模块: $name，请选择其他文件夹",
-                            "无法添加"
-                        )
-                        return@chooseFile
-                    }
-
-                    // 检查路径是否已被占用
-                    val existingModule = checkPathAlreadyExists(path)
-                    if (existingModule != null) {
-                        Messages.showErrorDialog(
-                            project,
-                            "路径 $path 已被模块 ${existingModule.name} 使用，无法重复添加",
-                            "无法添加"
-                        )
-                        return@chooseFile
-                    }
-
-                    // 添加模块
-                    service.addCustomModule(name, path)
-
-                    // 显示成功提示
-                    Messages.showInfoMessage(
-                        project,
-                        "已成功添加自定义组件: $name",
-                        "成功"
-                    )
-                } catch (e: Exception) {
-                    LOG.error("Failed to add custom module", e)
-                    Messages.showErrorDialog(
-                        project,
-                        "添加组件失败: ${e.message ?: "未知错误"}",
-                        "错误"
-                    )
-                }
-            }
-        }
         val filterPanel = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(4), 0)).apply {
             isOpaque = false
             add(filterLocalCheckBox)
@@ -423,7 +364,6 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         val bottomEastPanel = JPanel(FlowLayout(FlowLayout.RIGHT, JBUI.scale(4), 0)).apply {
             isOpaque = false
             add(statusLabel)
-            add(addModuleBtn)
             add(saveBtn)
             add(restoreBtn)
         }
@@ -849,20 +789,6 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             resolveLocalModulePath(module)?.canonicalPathOrSelf()
         }
         else -> null
-    }
-
-    /**
-     * 检查选中的路径是否已被其他模块占用
-     * @param selectedPath 用户选择的文件夹路径
-     * @return 占用该路径的 ModuleConfig，若无占用者返回 null
-     */
-    private fun checkPathAlreadyExists(selectedPath: String): ModuleConfig? {
-        val selectedCanonical = selectedPath.canonicalPathOrSelf()
-
-        return service.modules.firstOrNull { module ->
-            val existingPath = resolveModuleAbsolutePath(module) ?: return@firstOrNull false
-            selectedCanonical == existingPath
-        }
     }
 
     private fun getOrCreateConsole(): ConsoleView {
