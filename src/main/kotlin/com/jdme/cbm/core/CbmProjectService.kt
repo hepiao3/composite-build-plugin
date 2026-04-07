@@ -552,12 +552,18 @@ class CbmProjectService(private val project: Project) {
     /**
      * 删除一个手动添加的自定义组件。
      * 从内存和状态文件中移除，并通知 UI 更新。
+     * 只有在删除的组件是 LOCAL 状态（includeBuild=true）时，才自动触发 Gradle Sync。
      */
     fun removeCustomModule(name: String) {
         if (!_customModuleEntries.containsKey(name)) {
             LOG.info("removeCustomModule: '$name' not found in custom entries, skip")
             return
         }
+
+        // 保存要删除的模块的 includeBuild 状态，用于判断是否需要触发 sync
+        val moduleToDelete = _modules.find { it.name == name && it.isCustom }
+        val isLocalModule = moduleToDelete?.includeBuild ?: false
+
         _customModuleEntries.remove(name)
         _customModuleDeps.remove(name)
         _modules.removeIf { it.name == name && it.isCustom }
@@ -576,9 +582,11 @@ class CbmProjectService(private val project: Project) {
                 // 3. 重新加载所有模块（包含 JSON5 中的组件）
                 loadModules()
 
-                // 4. 触发 Gradle Sync
+                // 4. 仅在删除的组件是 LOCAL 状态时才触发 Gradle Sync
                 ApplicationManager.getApplication().invokeLater {
-                    GradleSyncTrigger.sync(project)
+                    if (isLocalModule) {
+                        GradleSyncTrigger.sync(project)
+                    }
                 }
             } catch (e: Exception) {
                 LOG.error("Failed to remove custom module", e)
