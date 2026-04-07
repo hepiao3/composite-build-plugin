@@ -483,6 +483,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         if (customCount == 0 && filterCustomCheckBox.isSelected) {
             filterCustomCheckBox.isSelected = false
             filterCustom = false
+            applyFilter()  // 取消 CUSTOM 筛选后，重新应用筛选逻辑展示所有组件
         }
         filterCustomCheckBox.isEnabled = customCount > 0
         statusLabel.text = if (missingCount > 0) "未下载: $missingCount" else ""
