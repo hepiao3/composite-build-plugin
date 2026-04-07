@@ -59,9 +59,9 @@ import java.io.File
  * ┌─ NORTH ──────────────────────────────────────────────────┐
  * │  [搜索框]                   [↺ Refresh] [⟳ Sync Gradle]   │
  * ├─ CENTER ─────────────────────────────────────────────────┤
- * │  JBTable: 模块名 | 状态 | 分支 | 操作                    │
+ * │  JBTable: 模块名 | 状态 | 分支 | 操作                       │
  * ├─ SOUTH ──────────────────────────────────────────────────┤
- * │  [LOCAL] [MAVEN] [CUSTOM]          未下载:N [💾] [↻]     │
+ * │  [LOCAL] [MAVEN] [CUSTOM]          未下载:N [💾] [↻]      │
  * └──────────────────────────────────────────────────────────┘
  * ```
  *
@@ -70,9 +70,6 @@ import java.io.File
  * 自定义组件：CUSTOM 模式下显示手动添加的组件，点击删除按钮即可移除。
  */
 class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
-
-    private val LOG = logger<ModuleListPanel>()
-
     private val service = CbmProjectService.getInstance(project)
     private val tableModel = ModuleTableModel()
     private val table = JBTable(tableModel)
