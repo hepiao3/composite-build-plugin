@@ -55,6 +55,7 @@ cd composite-build-plugin/
 
 | 版本 | 新增功能 | Bug 修复 |
 |------|---------|---------|
+| 1.0.10 | — | 移除 IncludeBuildWriter，复合构建统一由 cbm.init.gradle 管理 |
 | 1.0.9 | 支持从 Version Catalog (libs.xxx) 解析依赖的 group:artifact<br>添加自定义组件的依赖替换规则和行标记功能 | 修复Version Catalog依赖解析时的false positive问题，避免在成员访问链和本地模块依赖上添加行标记<br>改进自定义模块添加功能的异常处理和用户反馈<br>删除自定义组件时，仅在 LOCAL 状态时才自动触发 Gradle Sync<br>自定义组件删除后自动取消 CUSTOM 筛选并展示所有组件 |
 | 1.0.8 | 新增 CUSTOM 筛选项及自定义组件删除功能<br>新增手动添加本地组件功能，支持自定义路径持久化及复合构建 | 修复筛选项数量为 0 时未自动取消勾选并置灰<br>修复 CUSTOM 模式下表头全选复选框未隐藏<br>扩展模块键名正则以支持连字符 |
 | 1.0.7 | 新增保存/恢复 LOCAL 模块快照功能，按分支存储，方便切换场景时一键恢复 | 修复勾选模块为 LOCAL 时触发全量分支刷新的问题<br>分支加载仅在初始化和点击 Refresh 按钮时触发 |
