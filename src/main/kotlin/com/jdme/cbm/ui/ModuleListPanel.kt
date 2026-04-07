@@ -57,13 +57,17 @@ import java.io.File
  * 布局：
  * ```
  * ┌─ NORTH ──────────────────────────────────────────────────┐
- * │  [搜索框]                              [⟳ Sync Gradle]   │
+ * │  [搜索框]                   [↺ Refresh] [⟳ Sync Gradle]   │
  * ├─ CENTER ─────────────────────────────────────────────────┤
  * │  JBTable: 模块名 | 状态 | 分支 | 操作                    │
  * ├─ SOUTH ──────────────────────────────────────────────────┤
- * │  [全部 LOCAL]  [全部 MAVEN]       LOCAL:2 / MAVEN:43     │
+ * │  [LOCAL] [MAVEN] [CUSTOM]          未下载:N [💾] [↻]     │
  * └──────────────────────────────────────────────────────────┘
  * ```
+ *
+ * 模块筛选：可通过 LOCAL / MAVEN / CUSTOM 复选框进行互斥筛选。
+ * 快照功能：保存/恢复当前分支的 LOCAL 模块列表快照。
+ * 自定义组件：CUSTOM 模式下显示手动添加的组件，点击删除按钮即可移除。
  */
 class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
 
