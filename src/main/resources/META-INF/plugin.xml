@@ -13,7 +13,7 @@
           <li>支持一键下载缺失模块（委托 Node.js 脚本或 git clone）</li>
           <li>集成 Gradle Sync 触发，有未同步改动时按钮高亮提醒</li>
           <li>显示各模块当前 Git 分支，支持一键切换（含未提交修改检查）</li>
-          <li>支持模块名搜索过滤</li>
+          <li>支持组件名搜索过滤</li>
         </ul>
     ]]></description>
 

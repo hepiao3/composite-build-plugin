@@ -575,6 +575,11 @@ class CbmProjectService(private val project: Project) {
 
                 // 3. 重新加载所有模块（包含 JSON5 中的组件）
                 loadModules()
+
+                // 4. 触发 Gradle Sync
+                ApplicationManager.getApplication().invokeLater {
+                    GradleSyncTrigger.sync(project)
+                }
             } catch (e: Exception) {
                 LOG.error("Failed to remove custom module", e)
                 ApplicationManager.getApplication().invokeLater { notifyListeners() }

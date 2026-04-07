@@ -144,7 +144,7 @@ class DepSelectionDialog(
         panel.add(scroll, BorderLayout.CENTER)
 
         panel.add(
-            JBLabel("<html><small>依赖替换规则：Group ID + 模块名 → 本地 project 路径</small></html>"),
+            JBLabel("<html><small>依赖替换规则：Group ID + 组件名 → 本地 project 路径</small></html>"),
             BorderLayout.SOUTH
         )
         panel.preferredSize = Dimension(500, -1)

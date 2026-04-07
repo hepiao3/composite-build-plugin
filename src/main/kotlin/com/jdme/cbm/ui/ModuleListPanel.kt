@@ -165,7 +165,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             border = JBUI.Borders.empty(4, 8)
         }
         searchField.apply {
-            textEditor.emptyText.text = "搜索模块名..."
+            textEditor.emptyText.text = "搜索组件名..."
             addDocumentListener(object : javax.swing.event.DocumentListener {
                 override fun insertUpdate(e: javax.swing.event.DocumentEvent) = applyFilter()
                 override fun removeUpdate(e: javax.swing.event.DocumentEvent) = applyFilter()
@@ -212,7 +212,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
                     headerValue = ""
                 }
                 getColumn(COL_NAME).apply {
-                    headerValue = "模块名"
+                    headerValue = "组件名"
                     preferredWidth = JBUI.scale(150)
                 }
                 getColumn(COL_STATUS).apply {
