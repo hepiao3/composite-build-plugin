@@ -40,7 +40,7 @@ object LocalBuildScanner {
             }
         }
 
-        // 过滤掉包含 <application 标签的 module（通过 AndroidManifest.xml 检测）
+        // 过滤掉 app 级别的 module（根目录有 AndroidManifest.xml）
         val filtered = subProjects.filter { path ->
             !hasApplicationTag(buildDir, path)
         }
@@ -51,15 +51,17 @@ object LocalBuildScanner {
         )
     }
 
-    /** 检查指定 module 目录下是否有 AndroidManifest.xml（app module 才有） */
+    /** 检查指定 module 的 AndroidManifest.xml 中是否含有 <application 标签（app module 特征） */
     private fun hasApplicationTag(buildDir: File, modulePath: String): Boolean {
         val parts = modulePath.split(":")
         var dir = buildDir
         for (part in parts) {
             dir = File(dir, part)
         }
-        // 递归查找 AndroidManifest.xml
-        return dir.walkTopDown().any { it.name == "AndroidManifest.xml" }
+        val manifest = File(dir, "src/main/AndroidManifest.xml")
+        if (!manifest.exists()) return false
+        val content = manifest.readText()
+        return "<application" in content && "android.intent.category.LAUNCHER" in content
     }
 
     private fun readGroupId(buildDir: File): String? {
