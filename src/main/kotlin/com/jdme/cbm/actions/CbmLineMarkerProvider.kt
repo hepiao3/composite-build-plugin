@@ -36,6 +36,11 @@ class CbmLineMarkerProvider : LineMarkerProvider {
     private val libsDepPattern = Regex("""(?<![.\w])libs\.([A-Za-z][\w.]*)""")
 
     override fun getLineMarkerInfo(element: PsiElement): LineMarkerInfo<*>? {
+        // 检查 project-repos.json5 是否存在，不存在则不显示加号
+        val projectRoot = File(element.project.basePath ?: "")
+        val configFile = File(projectRoot, "scripts/module_manager/project-repos.json5")
+        if (!configFile.exists()) return null
+
         // 只处理叶子节点（token），保证每行只出现一个 marker
         if (element.firstChild != null) return null
         if (element.text !in depKeywords) return null
