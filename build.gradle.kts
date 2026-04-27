@@ -21,11 +21,12 @@ repositories {
 }
 
 val localAndroidStudioPath = "/Applications/Android Studio Preview.app/Contents"
+val isLocalBuild = file(localAndroidStudioPath).exists()
 
 dependencies {
     intellijPlatform {
         // 本地开发用本地 Android Studio；CI 环境自动下载指定版本
-        if (file(localAndroidStudioPath).exists()) {
+        if (isLocalBuild) {
             local(localAndroidStudioPath)
         } else {
             androidStudio(providers.gradleProperty("ciAndroidStudioVersion").get())
@@ -34,7 +35,10 @@ dependencies {
         // Required bundled plugins
         bundledPlugin("com.intellij.gradle")
         bundledPlugin("org.jetbrains.plugins.gradle")
-        bundledPlugin("org.jetbrains.android")
+        // 使用 androidStudio() 下载时，org.jetbrains.android 是平台核心组件，无需单独声明
+        if (isLocalBuild) {
+            bundledPlugin("org.jetbrains.android")
+        }
 
         pluginVerifier()
         zipSigner()
