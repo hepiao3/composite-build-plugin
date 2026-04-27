@@ -20,10 +20,16 @@ repositories {
     }
 }
 
+val localAndroidStudioPath = "/Applications/Android Studio Preview.app/Contents"
+
 dependencies {
     intellijPlatform {
-        // 基于本地 Android Studio 编译，以获取 org.jetbrains.android 等 AS 专属 API
-        local("/Applications/Android Studio Preview.app/Contents")
+        // 本地开发用本地 Android Studio；CI 环境自动下载指定版本
+        if (file(localAndroidStudioPath).exists()) {
+            local(localAndroidStudioPath)
+        } else {
+            androidStudio(providers.gradleProperty("ciAndroidStudioVersion").get())
+        }
 
         // Required bundled plugins
         bundledPlugin("com.intellij.gradle")
