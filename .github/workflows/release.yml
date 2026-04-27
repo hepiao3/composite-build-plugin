@@ -24,6 +24,9 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
+      - name: Print Bundled Plugins
+        run: ./gradlew printBundledPlugins
+
       - name: Build Plugin
         run: ./gradlew buildPlugin
 
