@@ -15,6 +15,18 @@
 | 搜索过滤 | 支持按模块名搜索过滤 |
 | 右键菜单 | 在 Project 视图中右键 → Composite Build 快速访问 |
 | 自动刷新 | 面板显示或收起/展开时自动刷新最新勾选状态 |
+| 自定义组件 | 手动添加本地组件并配置依赖替换规则，支持路径持久化及复合构建 |
+| 行标记 | 在 build.gradle 中为可复合构建的依赖显示行标记，支持从 Version Catalog 解析 group:artifact |
+
+## 截图
+
+<div align="center"><img src="screenshots/panel.png" alt="Composite Build 面板" width="483"/></div>
+
+<div align="center">
+  <img src="screenshots/line-marker.png" alt="行标记" width="45%"/>
+  &nbsp;&nbsp;
+  <img src="screenshots/add-custom.png" alt="添加自定义组件" width="45%"/>
+</div>
 
 ## 构建插件
 
