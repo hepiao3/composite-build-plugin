@@ -58,9 +58,11 @@ class CbmProjectService(private val project: Project) {
 
     val configFile: File
         get() {
+            val projectPath = CbmProjectSettings.getInstance(project).configFilePath
+            if (projectPath.isNotBlank()) return File(projectPath)
             val customPath = CbmSettings.getInstance().customConfigPath
-            return if (customPath.isNotBlank()) File(customPath)
-                   else File(projectRoot, "scripts/module_manager/project-repos.json5")
+            if (customPath.isNotBlank()) return File(customPath)
+            return File(projectRoot, "project-repos.json5")
         }
 
     /** 当前工程的状态文件，位于 ~/.gradle/cbm/<hash>.json */

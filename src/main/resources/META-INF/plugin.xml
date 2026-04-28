@@ -52,6 +52,19 @@
         <projectService
             serviceImplementation="com.jdme.cbm.core.CbmProjectService"
         />
+
+        <!-- 项目级设置：用户自定义配置文件路径 -->
+        <projectService
+            serviceImplementation="com.jdme.cbm.core.CbmProjectSettings"
+        />
+
+        <!-- Settings > Tools > Composite Build Manager -->
+        <projectConfigurable
+            parentId="tools"
+            instance="com.jdme.cbm.ui.CbmProjectConfigurable"
+            id="com.jdme.cbm.CbmProjectConfigurable"
+            displayName="Composite Build Manager"
+        />
     </extensions>
 
     <actions>

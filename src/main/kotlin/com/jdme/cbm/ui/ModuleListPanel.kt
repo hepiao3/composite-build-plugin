@@ -24,11 +24,16 @@ import com.jdme.cbm.model.getAllBranches
 import com.jdme.cbm.model.checkoutBranch
 import com.jdme.cbm.model.hasUncommittedChanges
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.ui.AnimatedIcon
 import java.awt.BorderLayout
+import java.awt.CardLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
 import java.awt.Graphics
+import java.awt.GridBagConstraints
+import java.awt.GridBagLayout
+import java.awt.Insets
 import java.awt.event.ComponentAdapter
 import java.awt.event.ComponentEvent
 import java.io.IOException
@@ -73,6 +78,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val service = CbmProjectService.getInstance(project)
     private val tableModel = ModuleTableModel()
     private val table = JBTable(tableModel)
+    private val contentCardPanel = JPanel(CardLayout())
     private val searchField = SearchTextField()
     private val statusLabel = JBLabel("")
     private val syncBtn = JButton("⟳ Sync Gradle")
@@ -278,6 +284,24 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             }
         })
 
+        // 空状态面板：无模块时展示，提示用户配置
+        val emptyPanel = JPanel(GridBagLayout())
+        val gbc = GridBagConstraints().apply {
+            gridx = 0; gridy = 0
+            insets = Insets(8, 16, 8, 16)
+            anchor = GridBagConstraints.CENTER
+        }
+        emptyPanel.add(JBLabel("请先配置json5文件路径"), gbc)
+        gbc.gridy++
+        val openSettingsBtn = JButton("打开设置")
+        openSettingsBtn.addActionListener {
+            ShowSettingsUtil.getInstance().showSettingsDialog(project, CbmProjectConfigurable::class.java)
+        }
+        emptyPanel.add(openSettingsBtn, gbc)
+
+        contentCardPanel.add(scrollPane, "table")
+        contentCardPanel.add(emptyPanel, "empty")
+
         // 分支列点击监听（整个单元格均可触发）
         table.addMouseListener(object : java.awt.event.MouseAdapter() {
             override fun mousePressed(e: java.awt.event.MouseEvent) {
@@ -375,7 +399,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         bottomPanel.add(bottomEastPanel, BorderLayout.EAST)
 
         add(topPanel, BorderLayout.NORTH)
-        add(scrollPane, BorderLayout.CENTER)
+        add(contentCardPanel, BorderLayout.CENTER)
         add(bottomPanel, BorderLayout.SOUTH)
     }
 
@@ -392,6 +416,8 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
         tableModel.setData(displayedModules)
         updateStatusLabel()
+        val card = if (service.modules.isEmpty()) "empty" else "table"
+        (contentCardPanel.layout as CardLayout).show(contentCardPanel, card)
         adjustBranchWidth()
         table.tableHeader.repaint()
     }
