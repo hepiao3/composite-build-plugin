@@ -32,7 +32,7 @@
 
 ```bash
 cd composite-build-plugin/
-./gradlew buildPlugin
+./gradlew clean buildPlugin
 ```
 
 构建产物位于：`build/distributions/composite-build-plugin-*.zip`
@@ -47,16 +47,72 @@ cd composite-build-plugin/
 ## 使用
 
 1. 打开工程后，在右侧找到 **Composite Build** Tool Window
-2. 勾选/取消勾选模块的复选框来切换 LOCAL / MAVEN 模式
-3. 点击 **⟳ Sync Gradle** 按钮同步 Gradle
+2. 进入 Settings → Tools → Composite Build Manager，配置组件配置文件路径
+3. 勾选/取消勾选模块的复选框来切换 LOCAL / MAVEN 模式
+4. 点击 **⟳ Sync Gradle** 按钮同步 Gradle
 
 ## 文件关系
 
 | 文件 | 角色 |
 |------|------|
-| `scripts/module_manager/project-repos.json5` | 只读：模块配置中心（模块名、仓库地址、branch） |
+| 组件配置文件（路径在插件设置中配置） | 只读：模块配置中心（模块名、仓库地址、flavorAware 标记） |
 | `~/.gradle/init.d/cbm.gradle` | 插件自动部署的 Gradle init script，负责读取状态文件并动态注入 includeBuild 配置 |
 | `~/.gradle/cbm/<hash>.json` | 插件写入的状态文件，记录当前哪些模块启用了复合构建，由 init script 在构建时读取 |
+
+## 组件配置文件格式说明
+
+文件采用 [JSON5](https://json5.org/) 格式，支持注释和末尾逗号。
+
+### 顶层结构
+
+```json5
+{
+  "repositories": {
+    "<模块名>": { ... },
+    ...
+  }
+}
+```
+
+### 模块键名
+
+与 `gradle/libs.versions.toml` 中 `[libraries]` 部分的键名一一对应（下划线分隔）。插件以此键名在 Version Catalog 和本地目录之间建立映射关系。
+
+### 模块字段
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `url` | String | 是 | 子模块 Git 仓库的 SSH 地址，点击「↓ 下载」时用于 `git clone` |
+| `flavorAware` | Boolean | 否 | 为 `true` 时，插件会为该模块生成 flavor 维度的依赖替换规则（默认 `false`）|
+
+### 本地目录约定
+
+子模块克隆后存放在与主工程**平级**的 `../<模块名>_project` 目录，例如：
+
+```
+workspace/
+├── jm_android_project/   ← 主工程
+└── jm_network_project/     ← jm_network 模块克隆位置
+```
+
+### 示例
+
+```json5
+{
+  "repositories": {
+    // 普通模块：仅需提供 Git 地址
+    "jm_network": {
+      "url": "xxx:xx/jm_network.git",
+    },
+
+    // flavorAware 模块：需要按 flavor 生成依赖替换规则
+    "jm_manto": {
+      "url": "xxx:xx/manto_project.git",
+      "flavorAware": true
+    },
+  }
+}
+```
 
 ## 兼容性
 
