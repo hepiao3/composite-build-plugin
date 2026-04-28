@@ -34,13 +34,11 @@ object BuildVariantReader {
             module.name == "app" || module.name.endsWith(".app")
         }
         if (appModule == null) {
-            LOG.warn("BuildVariantReader: 未找到 app 模块")
             return null
         }
 
         val model = GradleAndroidModel.get(appModule)
         if (model == null) {
-            LOG.warn("BuildVariantReader: GradleAndroidModel 未就绪（Gradle Sync 未完成？）")
             return null
         }
 

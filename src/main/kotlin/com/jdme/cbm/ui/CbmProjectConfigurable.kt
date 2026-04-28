@@ -6,6 +6,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.TextFieldWithBrowseButton
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.FormBuilder
+import com.jdme.cbm.CbmBundle
 import com.jdme.cbm.core.CbmProjectService
 import com.jdme.cbm.core.CbmProjectSettings
 import javax.swing.JComponent
@@ -27,17 +28,15 @@ class CbmProjectConfigurable(private val project: Project) : Configurable {
             /* chooseJarContents = */ false,
             /* chooseMultiple = */ false
         ).apply {
-            title = "选择配置文件"
-            description = "选择 project-repos.json5 或同格式的 JSON5 文件"
+            title = CbmBundle.message("settings.config_file.chooser_title")
+            description = CbmBundle.message("settings.config_file.chooser_description")
         }
         pathField.addBrowseFolderListener(project, descriptor)
 
-        val defaultHint = JBLabel(
-            "<html><font color='gray'>留空则使用默认路径：&lt;项目根目录&gt;/project-repos.json5</font></html>"
-        )
+        val defaultHint = JBLabel(CbmBundle.message("settings.config_file.hint"))
 
         return FormBuilder.createFormBuilder()
-            .addLabeledComponent("配置文件路径：", pathField)
+            .addLabeledComponent(CbmBundle.message("settings.config_file.label"), pathField)
             .addComponent(defaultHint)
             .addComponentFillVertically(JPanel(), 0)
             .panel

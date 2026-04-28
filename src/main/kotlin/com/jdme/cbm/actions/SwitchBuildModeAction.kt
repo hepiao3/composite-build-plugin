@@ -6,6 +6,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBScrollPane
+import com.jdme.cbm.CbmBundle
 import com.jdme.cbm.core.CbmProjectService
 import com.jdme.cbm.core.GradleSyncTrigger
 import com.jdme.cbm.model.ModuleConfig
@@ -15,7 +16,7 @@ import javax.swing.*
 /**
  * 右键菜单 Action：弹出对话框，让用户选择模块并批量切换 includeBuild 状态。
  */
-class SwitchBuildModeAction : AnAction("切换构建模式…") {
+class SwitchBuildModeAction : AnAction() {
 
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
@@ -50,11 +51,11 @@ private class SwitchBuildModeDialog(
 ) : DialogWrapper(project) {
 
     private val moduleList = JBList(service.modules.map { "${it.status.icon} ${it.name} [${it.status.displayName}]" })
-    private val toLocalRadio = JRadioButton("切换为 LOCAL（启用复合构建）", true)
-    private val toMavenRadio = JRadioButton("切换为 MAVEN（使用 Maven 依赖）")
+    private val toLocalRadio = JRadioButton(CbmBundle.message("dialog.switch_mode.radio_local"), true)
+    private val toMavenRadio = JRadioButton(CbmBundle.message("dialog.switch_mode.radio_maven"))
 
     init {
-        title = "切换构建模式"
+        title = CbmBundle.message("dialog.switch_mode.title")
         moduleList.selectionMode = ListSelectionModel.MULTIPLE_INTERVAL_SELECTION
         ButtonGroup().apply {
             add(toLocalRadio)
@@ -69,12 +70,12 @@ private class SwitchBuildModeDialog(
             border = com.intellij.util.ui.JBUI.Borders.empty(8)
         }
 
-        val topLabel = JLabel("选择要切换的模块（可多选）：")
+        val topLabel = JLabel(CbmBundle.message("dialog.switch_mode.select_label"))
         panel.add(topLabel, java.awt.BorderLayout.NORTH)
         panel.add(JBScrollPane(moduleList), java.awt.BorderLayout.CENTER)
 
         val modePanel = JPanel(java.awt.GridLayout(2, 1)).apply {
-            border = BorderFactory.createTitledBorder("目标模式")
+            border = BorderFactory.createTitledBorder(CbmBundle.message("dialog.switch_mode.target_mode_border"))
             add(toLocalRadio)
             add(toMavenRadio)
         }
@@ -97,7 +98,7 @@ private class SwitchBuildModeDialog(
         service.setIncludeBuildBatch(selectedNames, targetValue) {
             val choice = JOptionPane.showConfirmDialog(
                 null,
-                "已切换 ${selectedNames.size} 个模块，是否立即 Sync Gradle？",
+                CbmBundle.message("dialog.switch_mode.confirm_message", selectedNames.size),
                 "Sync Gradle",
                 JOptionPane.YES_NO_OPTION,
                 JOptionPane.QUESTION_MESSAGE

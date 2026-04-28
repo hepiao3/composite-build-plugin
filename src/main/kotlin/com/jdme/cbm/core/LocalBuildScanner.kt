@@ -1,5 +1,6 @@
 package com.jdme.cbm.core
 
+import com.jdme.cbm.CbmBundle
 import java.io.File
 
 object LocalBuildScanner {
@@ -20,9 +21,9 @@ object LocalBuildScanner {
 
     /** 校验是否为有效 Gradle 项目。null=有效，非 null=错误信息 */
     fun validate(buildDir: File): String? {
-        if (!buildDir.exists() || !buildDir.isDirectory) return "目录不存在：${buildDir.absolutePath}"
+        if (!buildDir.exists() || !buildDir.isDirectory) return CbmBundle.message("error.dir_not_exist", buildDir.absolutePath)
         val hasSettings = listOf("settings.gradle", "settings.gradle.kts").any { File(buildDir, it).exists() }
-        return if (hasSettings) null else "所选目录不是有效的 Gradle 项目\n（未找到 settings.gradle 或 settings.gradle.kts）"
+        return if (hasSettings) null else CbmBundle.message("error.not_gradle_project")
     }
 
     fun scan(buildDir: File): ScanResult {

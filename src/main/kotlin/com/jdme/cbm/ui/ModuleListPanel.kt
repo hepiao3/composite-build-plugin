@@ -14,6 +14,7 @@ import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.table.JBTable
 import com.intellij.util.ui.JBUI
+import com.jdme.cbm.CbmBundle
 import com.jdme.cbm.core.CbmProjectService
 import com.jdme.cbm.core.GradleSyncTrigger
 import com.jdme.cbm.core.ModuleDownloader
@@ -97,14 +98,14 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
     // 保存/恢复图标按钮
     private val saveBtn = JButton(AllIcons.Actions.MenuSaveall).apply {
         isEnabled = false
-        toolTipText = "保存当前 LOCAL 模块列表到当前分支快照"
+        toolTipText = CbmBundle.message("ui.module_list.tooltip_save_snapshot")
         preferredSize = java.awt.Dimension(JBUI.scale(24), JBUI.scale(24))
         border = JBUI.Borders.empty(2)
         isContentAreaFilled = false
     }
     private val restoreBtn = JButton(AllIcons.Actions.Rollback).apply {
         isEnabled = false
-        toolTipText = "恢复当前分支已保存的 LOCAL 模块快照"
+        toolTipText = CbmBundle.message("ui.module_list.tooltip_restore_snapshot")
         preferredSize = java.awt.Dimension(JBUI.scale(24), JBUI.scale(24))
         border = JBUI.Borders.empty(2)
         isContentAreaFilled = false
@@ -167,7 +168,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             border = JBUI.Borders.empty(4, 8)
         }
         searchField.apply {
-            textEditor.emptyText.text = "搜索组件名..."
+            textEditor.emptyText.text = CbmBundle.message("ui.module_list.search_placeholder")
             addDocumentListener(object : javax.swing.event.DocumentListener {
                 override fun insertUpdate(e: javax.swing.event.DocumentEvent) = applyFilter()
                 override fun removeUpdate(e: javax.swing.event.DocumentEvent) = applyFilter()
@@ -175,7 +176,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             })
         }
         val refreshBranchBtn = JButton("↺ Refresh").apply {
-            toolTipText = "从 project-repos.json5 重新加载所有模块"
+            toolTipText = CbmBundle.message("ui.module_list.tooltip_refresh")
             addActionListener {
                 // 只清除 LOCAL 状态模块的分支缓存，MAVEN 模块保持现有缓存
                 service.modules.filter { it.status == ModuleStatus.LOCAL }
@@ -214,17 +215,17 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
                     headerValue = ""
                 }
                 getColumn(COL_NAME).apply {
-                    headerValue = "组件名"
+                    headerValue = CbmBundle.message("ui.module_list.col_name")
                     preferredWidth = JBUI.scale(150)
                 }
                 getColumn(COL_STATUS).apply {
-                    headerValue = "状态"
+                    headerValue = CbmBundle.message("ui.module_list.col_status")
                     maxWidth = JBUI.scale(100)
                     minWidth = JBUI.scale(80)
                     preferredWidth = JBUI.scale(90)
                 }
                 getColumn(COL_BRANCH).apply {
-                    headerValue = "分支"
+                    headerValue = CbmBundle.message("ui.module_list.col_branch")
                     minWidth = JBUI.scale(120)
                     preferredWidth = JBUI.scale(160)
                     cellRenderer = BranchRenderer()
@@ -291,9 +292,9 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             insets = Insets(8, 16, 8, 16)
             anchor = GridBagConstraints.CENTER
         }
-        emptyPanel.add(JBLabel("请先配置json5文件路径"), gbc)
+        emptyPanel.add(JBLabel(CbmBundle.message("ui.module_list.no_config_hint")), gbc)
         gbc.gridy++
-        val openSettingsBtn = JButton("打开设置")
+        val openSettingsBtn = JButton(CbmBundle.message("ui.module_list.btn_open_settings"))
         openSettingsBtn.addActionListener {
             ShowSettingsUtil.getInstance().showSettingsDialog(project, CbmProjectConfigurable::class.java)
         }
@@ -356,8 +357,8 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
                 } else {
                     Messages.showMessageDialog(
                         project,
-                        "保存失败：无法获取当前分支名，请确认工程目录是 git 仓库。",
-                        "保存失败",
+                        CbmBundle.message("dialog.save_snapshot.error_message"),
+                        CbmBundle.message("dialog.save_snapshot.error_title"),
                         Messages.getErrorIcon()
                     )
                     updateSaveRestoreButtonStates()
@@ -372,8 +373,8 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
                 } else {
                     Messages.showMessageDialog(
                         project,
-                        "恢复失败：当前分支没有已保存的模块快照，或无法获取分支名。",
-                        "恢复失败",
+                        CbmBundle.message("dialog.restore_snapshot.error_message"),
+                        CbmBundle.message("dialog.restore_snapshot.error_title"),
                         Messages.getErrorIcon()
                     )
                     updateSaveRestoreButtonStates()
@@ -513,11 +514,11 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
             applyFilter()  // 取消 CUSTOM 筛选后，重新应用筛选逻辑展示所有组件
         }
         filterCustomCheckBox.isEnabled = customCount > 0
-        statusLabel.text = if (missingCount > 0) "未下载: $missingCount" else ""
+        statusLabel.text = if (missingCount > 0) CbmBundle.message("ui.module_list.status_missing_count", missingCount) else ""
         if (service.hasUnsavedChanges) {
             syncBtn.text = "⚠ Sync Gradle"
             syncBtn.foreground = java.awt.Color(0xE65100)
-            syncBtn.toolTipText = "有未同步的改动，点击使配置生效"
+            syncBtn.toolTipText = CbmBundle.message("ui.module_list.tooltip_sync_pending")
         } else {
             syncBtn.text = "⟳ Sync Gradle"
             syncBtn.foreground = null
@@ -551,11 +552,10 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         if (value && !module.localDirExists) {
             val choice = Messages.showYesNoDialog(
                 project,
-                "模块 ${module.name} 的本地目录不存在（${module.localDirName}）。\n\n" +
-                "是否现在下载？",
-                "模块未下载",
-                "下载",
-                "取消",
+                CbmBundle.message("dialog.missing_module.message", module.name, module.localDirName),
+                CbmBundle.message("dialog.missing_module.title"),
+                CbmBundle.message("dialog.missing_module.btn_download"),
+                CbmBundle.message("dialog.missing_module.btn_cancel"),
                 Messages.getWarningIcon()
             )
             if (choice != Messages.YES) return
@@ -574,10 +574,10 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         val module = displayedModules.getOrNull(row) ?: return
         val choice = Messages.showYesNoDialog(
             project,
-            "确认删除自定义组件 「${module.name}」？\n路径：${module.customPath ?: ""}",
-            "删除自定义组件",
-            "删除",
-            "取消",
+            CbmBundle.message("dialog.delete_custom.message", module.name, module.customPath ?: ""),
+            CbmBundle.message("dialog.delete_custom.title"),
+            CbmBundle.message("dialog.delete_custom.btn_delete"),
+            CbmBundle.message("dialog.delete_custom.btn_cancel"),
             Messages.getWarningIcon()
         )
         if (choice != Messages.YES) return
@@ -617,11 +617,11 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         if (missingNames.isNotEmpty()) {
             val choice = Messages.showYesNoDialog(
                 project,
-                "有 ${missingNames.size} 个模块的本地目录不存在：\n" +
+                CbmBundle.message("dialog.batch_local.header", missingNames.size) +
                 missingNames.take(5).joinToString("\n") { "  - $it" } +
-                (if (missingNames.size > 5) "\n  ... 等" else "") +
-                "\n\n这些模块切换为 LOCAL 后状态将为「未下载」。继续吗？",
-                "批量切换 LOCAL",
+                (if (missingNames.size > 5) CbmBundle.message("dialog.batch_local.more") else "") +
+                CbmBundle.message("dialog.batch_local.footer"),
+                CbmBundle.message("dialog.batch_local.title"),
                 Messages.getWarningIcon()
             )
             if (choice != Messages.YES) return
@@ -671,7 +671,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         })
 
         val searchField = com.intellij.ui.components.JBTextField().apply {
-            emptyText.text = "搜索分支..."
+            emptyText.text = CbmBundle.message("ui.module_list.search_branch_placeholder")
             border = JBUI.Borders.empty(2, 4)
         }
 
@@ -763,12 +763,10 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         if (module.hasUncommittedChanges(projectRoot)) {
             val choice = Messages.showYesNoDialog(
                 project,
-                "模块 ${module.name} 存在未提交的修改。\n\n" +
-                "强制切换分支可能导致修改丢失，建议先 commit 或 stash。\n\n" +
-                "是否仍要切换到 $branchName？",
-                "存在未提交修改",
-                "继续切换",
-                "取消",
+                CbmBundle.message("dialog.switch_branch.dirty_message", module.name, branchName),
+                CbmBundle.message("dialog.switch_branch.dirty_title"),
+                CbmBundle.message("dialog.switch_branch.btn_confirm"),
+                CbmBundle.message("dialog.switch_branch.btn_cancel"),
                 Messages.getWarningIcon()
             )
             if (choice != Messages.YES) return
@@ -784,8 +782,8 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
         } else {
             Messages.showMessageDialog(
                 project,
-                "切换到分支 $branchName 失败。\n\n$error",
-                "切换分支失败",
+                CbmBundle.message("dialog.switch_branch.error_message", branchName, error),
+                CbmBundle.message("dialog.switch_branch.error_title"),
                 Messages.getErrorIcon()
             )
         }
@@ -859,7 +857,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
                 COL_NAME -> m.name
                 COL_STATUS -> m.status
                 COL_BRANCH -> branchCache[m.name]
-                COL_ACTION -> if (m.status == ModuleStatus.MISSING) "↓ 下载" else ""
+                COL_ACTION -> if (m.status == ModuleStatus.MISSING) CbmBundle.message("ui.module_list.action_download") else ""
                 else -> ""
             }
         }
@@ -1067,7 +1065,7 @@ class ModuleListPanel(private val project: Project) : JPanel(BorderLayout()) {
 
             val comp = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, col)
 
-            text = branchName ?: if (!isLocal) "暂无（未下载）" else ""
+            text = branchName ?: if (!isLocal) CbmBundle.message("ui.module_list.branch_not_downloaded") else ""
             foreground = when {
                 isSelected -> table.selectionForeground
                 !isLocal && branchName == null -> java.awt.Color(0x888888)

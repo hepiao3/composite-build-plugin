@@ -67,6 +67,8 @@
         />
     </extensions>
 
+    <resource-bundle>messages.CbmBundle</resource-bundle>
+
     <actions>
         <!-- 右键菜单：切换构建模式 -->
         <group
@@ -78,15 +80,15 @@
             <action
                 id="com.jdme.cbm.SwitchBuildMode"
                 class="com.jdme.cbm.actions.SwitchBuildModeAction"
-                text="切换构建模式…"
-                description="切换选中模块的 includeBuild 状态"
+                text="%action.switch_build_mode.text%"
+                description="%action.switch_build_mode.description%"
             />
 
             <action
                 id="com.jdme.cbm.SyncGradle"
                 class="com.jdme.cbm.actions.SyncGradleAction"
                 text="Sync Gradle Now"
-                description="立即触发 Gradle 同步"
+                description="%action.sync_gradle.description%"
             />
         </group>
     </actions>

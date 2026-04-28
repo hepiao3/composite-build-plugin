@@ -6,6 +6,7 @@ import com.intellij.openapi.ui.Messages
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.util.ui.JBUI
+import com.jdme.cbm.CbmBundle
 import com.jdme.cbm.core.LocalBuildScanner
 import com.jdme.cbm.model.DepSubstitution
 import java.awt.BorderLayout
@@ -36,9 +37,9 @@ class DepSelectionDialog(
     private val radioButtons = mutableListOf<Pair<JRadioButton, LocalBuildScanner.ProjectEntry>>()
 
     init {
-        title = "添加复合构建组件（$moduleName）"
-        setOKButtonText("添加")
-        setCancelButtonText("取消")
+        title = CbmBundle.message("dialog.dep_selection.title", moduleName)
+        setOKButtonText(CbmBundle.message("dialog.dep_selection.btn_add"))
+        setCancelButtonText(CbmBundle.message("dialog.dep_selection.btn_cancel"))
         isResizable = true
         init()
         setupListeners()
@@ -112,19 +113,19 @@ class DepSelectionDialog(
         groupPanel.add(depField, gbc)
         if (resolvedDep == null) {
             gbc.gridx = 1; gbc.gridy = 1; gbc.insets = JBUI.insetsTop(2)
-            groupPanel.add(JBLabel("<html><small style='color:gray'>未检测到 Group:Artifact，请手动填写</small></html>"), gbc)
+            groupPanel.add(JBLabel(CbmBundle.message("dialog.dep_selection.no_artifact_hint")), gbc)
         }
         panel.add(groupPanel, BorderLayout.NORTH)
 
         // 模块列表（单选）
         val listPanel = JPanel().apply {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
-            border = BorderFactory.createTitledBorder("选择要替换的模块")
+            border = BorderFactory.createTitledBorder(CbmBundle.message("dialog.dep_selection.select_module_border"))
             minimumSize = Dimension(440, 100)
             maximumSize = Dimension(440, 500)
         }
         if (scanResult.allProjects.isEmpty()) {
-            listPanel.add(JBLabel("未检测到可用模块"))
+            listPanel.add(JBLabel(CbmBundle.message("dialog.dep_selection.no_module_hint")))
         } else {
             scanResult.allProjects.forEach { entry ->
                 val rb = JRadioButton(entry.name).apply {
@@ -144,7 +145,7 @@ class DepSelectionDialog(
         panel.add(scroll, BorderLayout.CENTER)
 
         panel.add(
-            JBLabel("<html><small>依赖替换规则：Group ID + 组件名 → 本地 project 路径</small></html>"),
+            JBLabel(CbmBundle.message("dialog.dep_selection.dep_rule_hint")),
             BorderLayout.SOUTH
         )
         panel.preferredSize = Dimension(500, -1)
@@ -199,20 +200,20 @@ class DepSelectionDialog(
             val errors = mutableListOf<String>()
             val dep = depField.text.trim()
             if (dep.isBlank()) {
-                errors.add("请填写 Group:Artifact")
+                errors.add(CbmBundle.message("dialog.dep_selection.error_fill_artifact"))
             } else if (hasDuplicateCombination()) {
                 val cleanedDep = cleanDep(dep)
                 val selectedProjects = getSelectedEnabledProjects()
                 val duplicateProjects = getExistingDepSubstitutions()
                     .filter { it.dep == cleanedDep && selectedProjects.contains(it.project) }
                     .map { it.project }
-                errors.add("Group:Artifact '$cleanedDep' 与模块 $duplicateProjects 的组合已存在")
+                errors.add(CbmBundle.message("dialog.dep_selection.error_duplicate", cleanedDep, duplicateProjects))
             }
-            if (!radioButtons.any { (cb, _) -> cb.isEnabled && cb.isSelected }) errors.add("请至少选择一个模块")
+            if (!radioButtons.any { (cb, _) -> cb.isEnabled && cb.isSelected }) errors.add(CbmBundle.message("dialog.dep_selection.error_select_module"))
             Messages.showErrorDialog(
                 project,
                 errors.joinToString("\n"),
-                "无法添加"
+                CbmBundle.message("dialog.dep_selection.error_title")
             )
             return
         }

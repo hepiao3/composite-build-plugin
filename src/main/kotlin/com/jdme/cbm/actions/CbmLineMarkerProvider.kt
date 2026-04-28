@@ -10,6 +10,7 @@ import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiElement
+import com.jdme.cbm.CbmBundle
 import com.jdme.cbm.core.CbmProjectService
 import com.jdme.cbm.core.LocalBuildScanner
 import com.jdme.cbm.ui.DepSelectionDialog
@@ -82,26 +83,26 @@ class CbmLineMarkerProvider : LineMarkerProvider {
                 val project = elem.project
                 val service = CbmProjectService.getInstance(project)
                 val descriptor = FileChooserDescriptorFactory.createSingleFolderDescriptor().apply {
-                    title = "选择本地组件文件夹"
+                    title = CbmBundle.message("action.line_marker.chooser_title")
                 }
                 FileChooser.chooseFile(descriptor, project, null) { vFile ->
                     val buildDir = File(vFile.path)
                     val error = LocalBuildScanner.validate(buildDir)
                     if (error != null) {
-                        Messages.showErrorDialog(project, error, "无效的 Gradle 项目")
+                        Messages.showErrorDialog(project, error, CbmBundle.message("action.line_marker.invalid_gradle_title"))
                         return@chooseFile
                     }
                     val scanResult = LocalBuildScanner.scan(buildDir)
                     if (scanResult.allProjects.isEmpty()) {
-                        Messages.showErrorDialog(project, "在 settings.gradle 中未检测到任何可用模块", "扫描失败")
+                        Messages.showErrorDialog(project, CbmBundle.message("action.line_marker.no_modules_message"), CbmBundle.message("action.line_marker.scan_failed_title"))
                         return@chooseFile
                     }
                     // 检查同名模块是否已存在
                     if (service.modules.any { it.name == vFile.name }) {
                         Messages.showErrorDialog(
                             project,
-                            "已存在同名模块: ${vFile.name}，请选择其他文件夹",
-                            "无法添加"
+                            CbmBundle.message("action.line_marker.duplicate_module_message", vFile.name),
+                            CbmBundle.message("dialog.dep_selection.error_title")
                         )
                         return@chooseFile
                     }

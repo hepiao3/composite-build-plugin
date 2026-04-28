@@ -1,5 +1,6 @@
 package com.jdme.cbm.model
 
+import com.jdme.cbm.CbmBundle
 import java.io.File
 
 /**
@@ -64,10 +65,12 @@ data class ModuleConfig(
  * - [MAVEN]   : includeBuild=false，从 Maven 仓库拉取 AAR
  * - [MISSING] : includeBuild=true 但本地目录不存在，需要先下载
  */
-enum class ModuleStatus(val displayName: String, val icon: String) {
-    LOCAL("LOCAL", ""),
-    MAVEN("MAVEN", ""),
-    MISSING("未下载", "")
+enum class ModuleStatus(val icon: String) {
+    LOCAL(""),
+    MAVEN(""),
+    MISSING("");
+
+    val displayName: String get() = CbmBundle.message("model.status.${name.lowercase()}")
 }
 
 /** 根据主工程根目录检测模块本地目录是否存在 */
@@ -203,9 +206,9 @@ fun ModuleConfig.hasUncommittedChanges(projectRoot: File): Boolean {
  * @return 切换成功返回 null，失败返回错误信息字符串
  */
 fun ModuleConfig.checkoutBranch(projectRoot: File, branchName: String): String? {
-    if (!localDirExists) return "本地目录不存在"
-    val localDir = resolveLocalDir(projectRoot) ?: return "无法获取父目录"
-    if (!localDir.isDirectory) return "本地目录不存在"
+    if (!localDirExists) return CbmBundle.message("error.local_dir_not_exist")
+    val localDir = resolveLocalDir(projectRoot) ?: return CbmBundle.message("error.no_parent_dir")
+    if (!localDir.isDirectory) return CbmBundle.message("error.local_dir_not_exist")
 
     return try {
         // 远程分支（origin/xxx）：先尝试切换到同名本地分支，不存在则创建并跟踪
@@ -220,8 +223,8 @@ fun ModuleConfig.checkoutBranch(projectRoot: File, branchName: String): String? 
             .redirectErrorStream(true)
             .start()
         val output = process.inputStream.bufferedReader().readText().trim()
-        if (process.waitFor() == 0) null else output.ifEmpty { "未知错误" }
+        if (process.waitFor() == 0) null else output.ifEmpty { CbmBundle.message("error.unknown") }
     } catch (e: Exception) {
-        e.message ?: "未知错误"
+        e.message ?: CbmBundle.message("error.unknown")
     }
 }

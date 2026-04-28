@@ -6,6 +6,7 @@ import com.intellij.execution.ui.ConsoleViewContentType
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
+import com.jdme.cbm.CbmBundle
 import com.jdme.cbm.model.ModuleConfig
 import java.io.File
 import java.io.InputStream
@@ -50,17 +51,17 @@ object ModuleDownloader {
         console: ConsoleView?
     ): Boolean {
         val parentDir = projectRoot.parentFile ?: run {
-            log(console, "❌ 无法确定父目录", error = true)
+            log(console, CbmBundle.message("console.downloader.no_parent_dir"), error = true)
             return false
         }
         val targetDir = File(parentDir, module.localDirName)
         if (targetDir.exists()) {
-            log(console, "✅ ${module.name} 目录已存在，跳过下载")
+            log(console, CbmBundle.message("console.downloader.already_exists", module.name))
             return true
         }
 
-        log(console, "📥 开始下载模块: ${module.name}")
-        log(console, "   目标目录: ${targetDir.absolutePath}")
+        log(console, CbmBundle.message("console.downloader.start", module.name))
+        log(console, CbmBundle.message("console.downloader.target_dir", targetDir.absolutePath))
 
         return runProcess(
             cmd = listOf("git", "clone", module.url, targetDir.absolutePath),
@@ -75,7 +76,7 @@ object ModuleDownloader {
         console: ConsoleView?
     ): Boolean {
         return try {
-            log(console, "   执行: ${cmd.joinToString(" ")}")
+            log(console, CbmBundle.message("console.downloader.executing", cmd.joinToString(" ")))
             val proc = ProcessBuilder(cmd)
                 .directory(workDir)
                 .redirectErrorStream(true)
@@ -86,14 +87,14 @@ object ModuleDownloader {
 
             val exitCode = proc.waitFor()
             if (exitCode == 0) {
-                log(console, "✅ 下载成功（exit code: $exitCode）")
+                log(console, CbmBundle.message("console.downloader.success", exitCode))
                 true
             } else {
-                log(console, "❌ 下载失败（exit code: $exitCode）", error = true)
+                log(console, CbmBundle.message("console.downloader.failure", exitCode), error = true)
                 false
             }
         } catch (e: Exception) {
-            log(console, "❌ 执行异常: ${e.message}", error = true)
+            log(console, CbmBundle.message("console.downloader.exception", e.message ?: ""), error = true)
             LOG.error("Process execution failed", e)
             false
         }
