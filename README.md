@@ -83,6 +83,7 @@ cd composite-build-plugin/
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `url` | String | 是 | 子模块 Git 仓库的 SSH 地址，点击「↓ 下载」时用于 `git clone` |
+| `path` | String | 否 | 本地目录的绝对路径；设置后以此路径读取组件，忽略默认的 `../<模块名>_project` 约定 |
 | `flavorAware` | Boolean | 否 | 为 `true` 时，插件会为该模块生成 flavor 维度的依赖替换规则（默认 `false`）|
 
 ### 本地目录约定
@@ -100,9 +101,15 @@ workspace/
 ```json5
 {
   "repositories": {
-    // 普通模块：仅需提供 Git 地址
+    // 普通模块：仅需提供 Git 地址，本地目录约定为 ../<模块名>_project
     "jm_network": {
       "url": "xxx:xx/jm_network.git",
+    },
+
+    // 指定本地路径：设置 path 后以该路径读取组件，不再使用约定路径
+    "jm_common": {
+      "url": "xxx:xx/jm_common.git",
+      "path": "/Users/dev/projects/jm_common",
     },
 
     // flavorAware 模块：需要按 flavor 生成依赖替换规则

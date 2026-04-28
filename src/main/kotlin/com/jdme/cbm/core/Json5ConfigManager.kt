@@ -34,6 +34,8 @@ object Json5ConfigManager {
     private val MODULE_KEY_RE = Regex("""^\s*"([\w-]+)"\s*:\s*\{""")
     // 匹配 url 字段
     private val URL_RE = Regex("""^\s*"url"\s*:\s*"([^"]+)"""")
+    // 匹配 path 字段
+    private val PATH_RE = Regex("""^\s*"path"\s*:\s*"([^"]+)"""")
     // 匹配 includeBuild 字段
     private val INCLUDE_BUILD_RE = Regex("""^\s*"includeBuild"\s*:\s*(true|false)""")
     // 匹配 flavorAware 字段
@@ -62,6 +64,7 @@ object Json5ConfigManager {
         var inRepositories = false
         var currentName: String? = null
         var currentUrl = ""
+        var currentPath: String? = null
         var currentIncludeBuild = false
         var currentFlavor = false
 
@@ -82,6 +85,7 @@ object Json5ConfigManager {
             MODULE_KEY_RE.find(line)?.let { match ->
                 currentName = match.groupValues[1]
                 currentUrl = ""
+                currentPath = null
                 currentIncludeBuild = false
                 currentFlavor = false
                 return@let
@@ -95,6 +99,7 @@ object Json5ConfigManager {
 
             // 解析字段
             URL_RE.find(line)?.let { currentUrl = it.groupValues[1] }
+            PATH_RE.find(line)?.let { currentPath = it.groupValues[1] }
             INCLUDE_BUILD_RE.find(line)?.let { currentIncludeBuild = it.groupValues[1] == "true" }
             FLAVOR_RE.find(line)?.let { currentFlavor = it.groupValues[1] == "true" }
 
@@ -102,13 +107,15 @@ object Json5ConfigManager {
             if (BLOCK_END_RE.matches(line)) {
                 @Suppress("SENSELESS_COMPARISON")
                 val name = currentName!! // currentName 已在前面检查非空
-                val localExists = checkLocalDirExists(projectRoot, name)
+                val localExists = if (currentPath != null) File(currentPath).exists()
+                                  else checkLocalDirExists(projectRoot, name)
                 modules += ModuleConfig(
                     name = name,
                     url = currentUrl,
                     includeBuild = currentIncludeBuild,
                     localDirExists = localExists,
-                    flavorAware = currentFlavor
+                    flavorAware = currentFlavor,
+                    configPath = currentPath
                 )
                 currentName = null
             }
