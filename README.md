@@ -132,7 +132,7 @@ workspace/
 
 | Version | New Features | Bug Fixes |
 |---------|-------------|-----------|
-| 1.0.12 | Added internationalization support and resource file refactoring<br>Added project configuration feature and UI refactoring | Config file supports `path` field to specify local path instead of the default convention |
+| 1.0.12 | Added internationalization support and resource file refactoring<br>Added project configuration feature and UI refactoring<br>Config file supports `path` field to specify local path instead of the default convention | — |
 | 1.0.11 | — | Fixed LocalBuildScanner logic for filtering app module<br>Hide line marker "+" when config file does not exist |
 | 1.0.10 | — | Removed IncludeBuildWriter; composite build is now managed entirely by cbm.init.gradle |
 | 1.0.9 | Support resolving group:artifact from Version Catalog (libs.xxx)<br>Added dependency substitution rules and line markers for custom components | Fixed false positives when resolving Version Catalog dependencies<br>Improved error handling and user feedback when adding custom modules<br>Auto Gradle Sync on custom component deletion only when in LOCAL state<br>Auto-cancel CUSTOM filter after deleting a custom component |

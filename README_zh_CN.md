@@ -132,7 +132,7 @@ workspace/
 
 | 版本 | 新增功能 | Bug 修复 |
 |------|---------|---------|
-| 1.0.12 | 添加国际化支持和资源文件重构<br>添加项目配置功能并重构 UI | 组件配置文件支持 `path` 字段，可指定本地路径替代默认约定路径 |
+| 1.0.12 | 添加国际化支持和资源文件重构<br>添加项目配置功能并重构 UI<br>组件配置文件支持 `path` 字段，可指定本地路径替代默认约定路径 | — |
 | 1.0.11 | — | 修复 LocalBuildScanner 过滤 app module 的逻辑<br>在 project-repos.json5 不存在时不显示行标记加号 |
 | 1.0.10 | — | 移除 IncludeBuildWriter，复合构建统一由 cbm.init.gradle 管理 |
 | 1.0.9 | 支持从 Version Catalog (libs.xxx) 解析依赖的 group:artifact<br>添加自定义组件的依赖替换规则和行标记功能 | 修复Version Catalog依赖解析时的false positive问题，避免在成员访问链和本地模块依赖上添加行标记<br>改进自定义模块添加功能的异常处理和用户反馈<br>删除自定义组件时，仅在 LOCAL 状态时才自动触发 Gradle Sync<br>自定义组件删除后自动取消 CUSTOM 筛选并展示所有组件 |
